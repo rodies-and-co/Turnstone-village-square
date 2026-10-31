@@ -21,9 +21,9 @@ own new project.
 ## 1. Put the code in GitHub
 
 1. Open **GitHub Desktop**: File → **Add local repository** → choose your
-   **Village-Square** folder.
+   **turnstone-village-square** folder on your Desktop.
 2. Click **Publish repository** (or **Push origin**) to send it to
-   `rodies-and-co/village-square`. Keep it **private**.
+   `rodies-and-co/Turnstone-village-square`. Keep it **private**.
 3. On github.com, open the repository → **Actions**. The "Checks" run should
    turn green within a few minutes. It runs every security test.
 
@@ -98,7 +98,7 @@ Both values are safe to store there. Never use a key marked **secret** or
 
 ## 5. Put the app on Vercel
 
-1. vercel.com → **Add New → Project** → import `rodies-and-co/village-square`.
+1. vercel.com → **Add New → Project** → import `rodies-and-co/Turnstone-village-square`.
 2. **Environment Variables**:
    - `NEXT_PUBLIC_SUPABASE_URL`: the **hub's** Project URL
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: the **hub's** Publishable key
