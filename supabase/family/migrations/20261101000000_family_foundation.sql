@@ -325,6 +325,8 @@ $$;
 
 create trigger audit_log_append_only before update or delete on public.audit_log
   for each row execute function private.audit_log_is_append_only();
+create trigger audit_log_no_truncate before truncate on public.audit_log
+  for each statement execute function private.audit_log_is_append_only();
 
 create function private.family_id_is_fixed()
 returns trigger
@@ -342,6 +344,63 @@ $$;
 
 create trigger family_settings_fixed_id before update on public.family_settings
   for each row execute function private.family_id_is_fixed();
+
+-- The settings row can be added once and never removed, so the database can
+-- never be switched to another family or hub.
+create function private.family_settings_is_permanent()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception 'The family settings of this database cannot be removed or replaced';
+end;
+$$;
+
+create trigger family_settings_no_delete before delete on public.family_settings
+  for each row execute function private.family_settings_is_permanent();
+create trigger family_settings_no_truncate before truncate on public.family_settings
+  for each statement execute function private.family_settings_is_permanent();
+
+-- Moving a person to another branch, or linking a person to someone's login,
+-- changes what Viewers can see. That is access management, so only Managers
+-- (and Super Users) may do it. Administrators may still place a NEW person in
+-- a branch.
+create function private.guard_person_visibility()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or private.can_manage() then
+    return new;
+  end if;
+  if tg_op = 'INSERT' and new.user_id is not null then
+    raise exception 'Only a Manager can link a person to a login';
+  end if;
+  if tg_op = 'UPDATE' and (
+    new.user_id is distinct from old.user_id
+    or new.branch_id is distinct from old.branch_id
+  ) then
+    raise exception 'Only a Manager can move a person to another branch or change their login link';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger people_guard_visibility before insert or update on public.people
+  for each row execute function private.guard_person_visibility();
+
+-- Supabase's service_role (the secret key) gets full table access by default.
+-- The app never uses it, and it may not touch the audit log or settings.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    revoke insert, update, delete, truncate on public.audit_log from service_role;
+    revoke insert, update, delete, truncate on public.family_settings from service_role;
+  end if;
+end
+$$;
 
 create function private.touch_updated_at()
 returns trigger

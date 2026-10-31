@@ -142,6 +142,7 @@ security definer
 set search_path = ''
 as $$
   select a.role from public.family_access a
+  join public.families f on f.id = a.family_id and f.status = 'active'
   where a.family_id = target_family
     and a.user_id = auth.uid()
     and (
@@ -150,24 +151,47 @@ as $$
     );
 $$;
 
--- Managers may add, change and remove Administrators and Viewers in their own
--- family. Only Super Users and System Admins may grant or remove Managers.
-create function private.can_manage_access(target_family uuid, target_role public.family_role)
+-- Who may give, change or remove a family role:
+-- - Super Users: anyone, any role.
+-- - System Admins: anyone except themselves and other Turnstone staff with a
+--   system role, any role.
+-- - Managers: Administrators and Viewers in their own family, except
+--   themselves and staff with a system role.
+-- Nobody but a Super User may change their own access, so a System Admin
+-- cannot make themselves a Manager and read family records.
+create function private.can_manage_access(
+  target_family uuid,
+  target_role public.family_role,
+  target_user uuid
+)
 returns boolean
 language sql
 stable
+security definer
 set search_path = ''
 as $$
-  select private.is_system_staff()
+  select private.is_super_user()
     or (
-      private.my_family_role(target_family) = 'manager'
-      and target_role in ('administrator', 'viewer')
+      target_user is distinct from auth.uid()
+      and not exists (
+        select 1 from public.staff s
+        where s.user_id = target_user and s.system_role is not null
+      )
+      and (
+        private.my_system_role() = 'system_admin'
+        or (
+          private.my_family_role(target_family) = 'manager'
+          and target_role in ('administrator', 'viewer')
+        )
+      )
     );
 $$;
 
 revoke all on all functions in schema private from public;
 grant usage on schema private to authenticated;
 grant execute on all functions in schema private to authenticated;
+-- Only the token hook needs this one; it takes any user id.
+revoke execute on function private.has_verified_mfa(uuid) from authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Row-level security
@@ -187,10 +211,12 @@ create policy "families: super users add" on public.families
   for insert to authenticated
   with check (private.is_super_user());
 
-create policy "families: system staff update" on public.families
+-- Only Super Users may change a family, including where its database lives.
+-- (A wrong address would send people's sign-in tokens to the wrong place.)
+create policy "families: super users update" on public.families
   for update to authenticated
-  using (private.is_system_staff())
-  with check (private.is_system_staff());
+  using (private.is_super_user())
+  with check (private.is_super_user());
 
 create policy "families: super users delete" on public.families
   for delete to authenticated
@@ -218,16 +244,16 @@ create policy "family_access: see own, managers see their family, staff see all"
 
 create policy "family_access: add" on public.family_access
   for insert to authenticated
-  with check (private.can_manage_access(family_id, role));
+  with check (private.can_manage_access(family_id, role, user_id));
 
 create policy "family_access: change" on public.family_access
   for update to authenticated
-  using (private.can_manage_access(family_id, role))
-  with check (private.can_manage_access(family_id, role));
+  using (private.can_manage_access(family_id, role, user_id))
+  with check (private.can_manage_access(family_id, role, user_id));
 
 create policy "family_access: remove" on public.family_access
   for delete to authenticated
-  using (private.can_manage_access(family_id, role));
+  using (private.can_manage_access(family_id, role, user_id));
 
 -- audit_log: read by system staff only. No insert/update/delete policies, so
 -- nobody can write to it directly; triggers write through SECURITY DEFINER.
@@ -274,8 +300,8 @@ create trigger staff_log after insert or update or delete on public.staff
 create trigger family_access_log after insert or update or delete on public.family_access
   for each row execute function private.log_change();
 
--- Audit entries can never be changed or removed, even by the database owner
--- through the API.
+-- Audit entries can never be changed or removed through the app or the API.
+-- (A database owner could still switch triggers off; that itself is visible.)
 create function private.audit_log_is_append_only()
 returns trigger
 language plpgsql
@@ -288,6 +314,18 @@ $$;
 
 create trigger audit_log_append_only before update or delete on public.audit_log
   for each row execute function private.audit_log_is_append_only();
+create trigger audit_log_no_truncate before truncate on public.audit_log
+  for each statement execute function private.audit_log_is_append_only();
+
+-- Supabase's service_role (the secret key) gets full table access by default.
+-- The app never uses it, and it may not touch the audit log.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    revoke insert, update, delete, truncate on public.audit_log from service_role;
+  end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Sign-in token hook
@@ -341,13 +379,5 @@ grant usage on schema public to supabase_auth_admin;
 grant usage on schema private to supabase_auth_admin;
 grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin;
 grant execute on function private.has_verified_mfa(uuid) to supabase_auth_admin;
-grant select on public.family_access, public.families, public.staff to supabase_auth_admin;
-
--- The token hook reads these tables as supabase_auth_admin, which is not
--- covered by the policies above.
-create policy "families: token hook reads" on public.families
-  for select to supabase_auth_admin using (true);
-create policy "staff: token hook reads" on public.staff
-  for select to supabase_auth_admin using (true);
-create policy "family_access: token hook reads" on public.family_access
-  for select to supabase_auth_admin using (true);
+-- The hook runs as its owner (SECURITY DEFINER), so supabase_auth_admin needs
+-- no direct access to the tables.

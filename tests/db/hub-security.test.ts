@@ -92,6 +92,26 @@ describe("hub: managing access", () => {
     }
   });
 
+  it("nobody but a Super User can give themselves access", async () => {
+    await expect(as(hub, user(USERS.systemAdmin), add(HARTLEY, USERS.systemAdmin, "manager"))).rejects.toThrow(
+      /row-level security/,
+    );
+    await expect(as(hub, user(USERS.hartleyManager), add(OKAFOR, USERS.hartleyManager, "viewer"))).rejects.toThrow(
+      /row-level security/,
+    );
+    const changed = await as(hub, user(USERS.hartleyAdministrator), async (db) =>
+      (await db.query("update family_access set role = 'manager' where user_id = $1", [USERS.hartleyAdministrator])).rowCount,
+    );
+    expect(changed).toBe(0);
+  });
+
+  it("only a Super User can give Turnstone staff with a system role a family role", async () => {
+    await expect(as(hub, user(USERS.hartleyManager), add(HARTLEY, USERS.systemAdmin, "administrator"))).rejects.toThrow(
+      /row-level security/,
+    );
+    await as(hub, user(USERS.superUser), add(HARTLEY, USERS.systemAdmin, "viewer"));
+  });
+
   it("a System Admin can add a Manager; only a Super User can add a family or staff", async () => {
     await as(hub, user(USERS.systemAdmin), add(OKAFOR, USERS.nobody, "manager"));
     await expect(
@@ -118,7 +138,51 @@ describe("hub: managing access", () => {
   });
 });
 
+describe("hub: where family databases live", () => {
+  it("only a Super User can change a family's database address", async () => {
+    const set = (db: Client) =>
+      db.query("update families set database_url = 'https://attacker.supabase.co' where id = $1", [HARTLEY]);
+    expect((await as(hub, user(USERS.systemAdmin), set)).rowCount).toBe(0);
+    expect((await as(hub, user(USERS.hartleyManager), set)).rowCount).toBe(0);
+    expect((await as(hub, user(USERS.superUser), set)).rowCount).toBe(1);
+  });
+
+  it("refuses an address that is not a Supabase project, and a secret key", async () => {
+    await expect(
+      asOwner(hub, (db) => db.query("update families set database_url = 'https://evil.example.com' where id = $1", [HARTLEY])),
+    ).rejects.toThrow(/check constraint/);
+    await expect(
+      asOwner(hub, (db) => db.query("update families set database_publishable_key = 'sb_secret_x' where id = $1", [HARTLEY])),
+    ).rejects.toThrow(/check constraint/);
+  });
+
+  it("hides archived families from their members", async () => {
+    await asOwner(hub, async (db) => {
+      await db.query("update families set status = 'archived' where id = $1", [HARTLEY]);
+      await db.query("set local role authenticated");
+      await db.query(`select set_config('request.jwt.claims', $1, true)`, [
+        JSON.stringify({ sub: USERS.hartleyManager, role: "authenticated", aal: "aal2" }),
+      ]);
+      expect(await count(db, "select * from families")).toBe(0);
+    });
+  });
+});
+
 describe("hub: audit log", () => {
+  it("cannot be emptied or written to, even with the secret key", async () => {
+    await asOwner(hub, async (db) => {
+      await expect(db.query("truncate audit_log")).rejects.toThrow(/cannot be changed/);
+    });
+    await asOwner(hub, async (db) => {
+      await db.query("set local role service_role");
+      await expect(db.query("insert into audit_log (action) values ('fake')")).rejects.toThrow(/permission denied/);
+    });
+    await asOwner(hub, async (db) => {
+      await db.query("set local role service_role");
+      await expect(db.query("delete from audit_log")).rejects.toThrow(/permission denied/);
+    });
+  });
+
   it("records changes, can be read by system staff only, and cannot be changed", async () => {
     await asOwner(hub, async (db) => {
       await db.query("insert into family_access (family_id, user_id, role) values ($1, $2, 'viewer')", [OKAFOR, USERS.nobody]);

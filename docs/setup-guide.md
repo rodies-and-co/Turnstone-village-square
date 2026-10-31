@@ -117,8 +117,11 @@ If it says the family database **did not recognise you**, the hub's sign-in
 isn't trusted by the family project yet. Check steps 2.4 and 3.3, then sign out
 and in again. If it still fails, tell Claude.
 
-There is a fallback that works without third-party auth: both projects share
-one signing key. Claude will walk you through it if it's needed.
+There is a fallback if third-party auth doesn't accept the hub: both projects
+share one public/private signing key. Claude will walk you through it if
+it's needed. **Never** copy the hub's legacy "JWT secret" into a family
+project. That would let the hub's secret key bypass every security rule in
+every family database.
 
 ## Giving other people access (for testing)
 

@@ -45,7 +45,8 @@ These rules are permanent. Follow them in every change.
 ## Roles
 
 - Super User: everything, in every family (with two-factor).
-- System Admin: users, access and settings in the hub; no family records.
+- System Admin: users, access and settings in the hub; no family records, and
+  cannot give themselves a family role.
 - Manager: reads, adds, changes, approves and removes in their families; manages
   Administrators and Viewers for their families.
 - Administrator: reads, adds and changes; cannot approve, delete or manage access.
@@ -63,7 +64,13 @@ These rules are permanent. Follow them in every change.
 - Two-factor is compulsory for everyone except Viewers. A Viewer who has set it
   up must use it.
 - Changes are recorded in `audit_log` by database triggers. Audit entries can
-  never be changed or deleted.
+  never be changed, deleted or emptied through the app or the API (the secret
+  key included).
+- Only a Super User may change where a family's database lives, give anyone a
+  role in a family they don't already manage, or give Turnstone staff with a
+  system role a family role. Nobody else can change their own access.
+- Moving a person to another branch or linking a person to a login changes
+  what Viewers see, so only Managers may do it.
 - Every feature gets tests proving people only see and change what they are
   allowed to, including tests that one family's token gets nothing from
   another family's database.

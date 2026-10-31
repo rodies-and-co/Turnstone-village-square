@@ -101,6 +101,33 @@ describe("family database: roles", () => {
     });
   });
 
+  it("an Administrator cannot widen what Viewers see by moving people or linking logins", async () => {
+    const s = await signedIn(USERS.hartleyAdministrator);
+    await expect(
+      as(hartley, s, (db) => db.query("update people set branch_id = $1 where id = $2", [HARTLEY_DB.northBranch, HARTLEY_DB.southPerson])),
+    ).rejects.toThrow(/Only a Manager/);
+    await expect(
+      as(hartley, s, (db) => db.query("update people set user_id = $1 where id = $2", [USERS.hartleyViewerOwnRecord, HARTLEY_DB.northPerson])),
+    ).rejects.toThrow(/Only a Manager/);
+    await expect(
+      as(hartley, s, (db) =>
+        db.query("insert into people (member_type, full_names, surname, user_id) values ('family', 'X', 'Y', $1)", [USERS.nobody]),
+      ),
+    ).rejects.toThrow(/Only a Manager/);
+    // Placing a new person in a branch is normal data entry.
+    await as(hartley, s, (db) =>
+      db.query("insert into people (member_type, full_names, surname, branch_id) values ('family', 'X', 'Y', $1)", [HARTLEY_DB.northBranch]),
+    );
+  });
+
+  it("a Manager can move people between branches and link logins", async () => {
+    const s = await signedIn(USERS.hartleyManager);
+    await as(hartley, s, async (db) => {
+      await db.query("update people set branch_id = $1 where id = $2", [HARTLEY_DB.northBranch, HARTLEY_DB.southPerson]);
+      await db.query("update people set user_id = $1 where id = $2", [USERS.nobody, HARTLEY_DB.northPerson]);
+    });
+  });
+
   it("an Administrator cannot manage access grants", async () => {
     const s = await signedIn(USERS.hartleyAdministrator);
     await expect(
@@ -161,6 +188,27 @@ describe("family database: safeguards", () => {
       await db.query("update people set known_as = 'Art' where id = $1", [HARTLEY_DB.northPerson]);
       expect(await count(db, "select * from audit_log where table_name = 'people' and action = 'update'")).toBeGreaterThan(0);
       await expect(db.query("delete from audit_log")).rejects.toThrow(/cannot be changed/);
+    });
+  });
+
+  it("the audit log cannot be emptied, and the secret key cannot touch it or the settings", async () => {
+    await asOwner(hartley, async (db) => {
+      await expect(db.query("truncate audit_log")).rejects.toThrow(/cannot be changed/);
+    });
+    for (const sql of ["insert into audit_log (action) values ('fake')", "delete from audit_log", "delete from family_settings"]) {
+      await asOwner(hartley, async (db) => {
+        await db.query("set local role service_role");
+        await expect(db.query(sql)).rejects.toThrow(/permission denied/);
+      });
+    }
+  });
+
+  it("the family settings cannot be removed and replaced", async () => {
+    await asOwner(hartley, async (db) => {
+      await expect(db.query("delete from family_settings")).rejects.toThrow(/cannot be removed or replaced/);
+    });
+    await asOwner(hartley, async (db) => {
+      await expect(db.query("truncate family_settings")).rejects.toThrow(/cannot be removed or replaced/);
     });
   });
 
