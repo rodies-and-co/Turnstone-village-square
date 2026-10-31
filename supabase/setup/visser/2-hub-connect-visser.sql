@@ -7,8 +7,8 @@
 -- Never use a key marked secret or service_role.
 
 update public.families
-set database_url = 'https://your-visser-ref.supabase.co',          -- CHANGE THIS
-    database_publishable_key = 'sb_publishable_xxxxxxxxxxxxxxxx'   -- CHANGE THIS
+set database_url = 'https://eeholikrjwrcqmazwsse.supabase.co/rest/v1/',          -- CHANGE THIS
+    database_publishable_key = 'sb_publishable___7uGLkUi_pJTVGxhPKR2w_ZCy38seY'   -- CHANGE THIS
 where id = 'ab3eacfa-f57f-43c1-afe0-f27f21407f0d';                 -- Visser
 
 select name, database_url, database_publishable_key is not null as has_key
