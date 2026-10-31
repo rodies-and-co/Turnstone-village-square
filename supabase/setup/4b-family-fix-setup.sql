@@ -6,7 +6,7 @@
 -- real values. The removal is recorded in the audit log.
 --
 -- CHANGE THIS (one line below): the hub's sign-in address, which is the hub's
--- Project URL with /auth/v1 added, e.g. https://abcdefgh.supabase.co/auth/v1
+-- Project URL with /auth/v1 added, e.g. https://horfbnxbeahaprdvfsqs.supabase.co/auth/v1
 
 do $$
 declare
