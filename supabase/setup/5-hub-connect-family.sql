@@ -4,9 +4,10 @@
 --
 -- Find them in the FAMILY project: Project Settings > Data API (Project URL)
 -- and Project Settings > API Keys (Publishable key, starts sb_publishable_).
+-- (If the address ends in /rest/v1/, that's fine: it is removed automatically.)
 
 update public.families
-set database_url = 'https://your-family-ref.supabase.co',          -- CHANGE THIS
+set database_url = regexp_replace(trim('https://your-family-ref.supabase.co'), '(/rest/v1)?/*$', ''),          -- CHANGE THIS
     database_publishable_key = 'sb_publishable_xxxxxxxxxxxxxxxx'   -- CHANGE THIS
 where name = 'Hartley';                                            -- CHANGE THIS
 

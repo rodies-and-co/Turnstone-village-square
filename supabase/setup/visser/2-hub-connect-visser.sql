@@ -5,9 +5,10 @@
 --   Project Settings > Data API  -> Project URL
 --   Project Settings > API Keys  -> Publishable key (starts sb_publishable_)
 -- Never use a key marked secret or service_role.
+-- (If the address ends in /rest/v1/, that's fine: it is removed automatically.)
 
 update public.families
-set database_url = 'https://eeholikrjwrcqmazwsse.supabase.co/rest/v1/',          -- CHANGE THIS
+set database_url = regexp_replace(trim('https://eeholikrjwrcqmazwsse.supabase.co/rest/v1/'), '(/rest/v1)?/*$', ''),          -- CHANGE THIS
     database_publishable_key = 'sb_publishable___7uGLkUi_pJTVGxhPKR2w_ZCy38seY'   -- CHANGE THIS
 where id = 'ab3eacfa-f57f-43c1-afe0-f27f21407f0d';                 -- Visser
 
