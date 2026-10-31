@@ -7,11 +7,19 @@
 -- CHANGE THIS 3: the hub's sign-in address: https://<hub project ref>.supabase.co/auth/v1
 --                (the hub's Project URL with /auth/v1 added at the end).
 
-insert into public.family_settings (family_id, family_name, hub_issuer)
-values (
-  '00000000-0000-0000-0000-000000000000',             -- CHANGE THIS 1
-  'Hartley',                                          -- CHANGE THIS 2
-  'https://your-hub-ref.supabase.co/auth/v1'          -- CHANGE THIS 3
-);
+do $$
+declare
+  v_family uuid := '00000000-0000-0000-0000-000000000000';  -- CHANGE THIS 1
+  v_name text := 'Hartley';                                 -- CHANGE THIS 2
+  v_hub text := 'https://your-hub-ref.supabase.co/auth/v1'; -- CHANGE THIS 3
+begin
+  -- Stops here if the example values are still in place.
+  if v_family = '00000000-0000-0000-0000-000000000000' or v_hub like '%your-hub-ref%' then
+    raise exception 'Fill in the family id and the hub address first (the lines marked CHANGE THIS). Nothing was saved.';
+  end if;
+  insert into public.family_settings (family_id, family_name, hub_issuer)
+  values (v_family, v_name, v_hub);
+end
+$$;
 
 select * from public.family_settings;
