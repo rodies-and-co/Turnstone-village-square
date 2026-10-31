@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/* Turnstone colour palette (shared with The Family Square). See CLAUDE.md. */
+:root {
+  --primary: #f15133;
+  --ink: #1a1816;
+  --background: #fcfaf6;
+  --card: #fefdfb;
+  --border: #eae0d2;
+  --muted: #f0eae2;
+  --bronze: #ecceb2;
+
+  /* Risk ratings. Always used with dark ink text (all pass WCAG AA). */
+  --risk-low: #d9eed3;
+  --risk-medium: #fbe3a3;
+  --risk-high: #f7b98c;
+  --risk-critical: #f15133;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-ink: var(--ink);
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-bronze: var(--bronze);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Buttons: dark ink text on orange, and at least 44px touch targets. */
+@layer components {
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 1.25rem;
+    border-radius: 0.5rem;
+    background: var(--primary);
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .btn-primary:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--card);
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .text-input {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--ink);
+    border-radius: 0.5rem;
+    background: var(--card);
+    color: var(--ink);
+  }
+
+  .text-area {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ink);
+    border-radius: 0.5rem;
+    background: var(--card);
+    color: var(--ink);
+  }
+
+  .btn-secondary:focus-visible,
+  .text-input:focus-visible,
+  .text-area:focus-visible,
+  a:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .risk-low {
+    background: var(--risk-low);
+    color: var(--ink);
+  }
+  .risk-medium {
+    background: var(--risk-medium);
+    color: var(--ink);
+  }
+  .risk-high {
+    background: var(--risk-high);
+    color: var(--ink);
+  }
+  .risk-critical {
+    background: var(--risk-critical);
+    color: var(--ink);
+  }
+
+  .alert {
+    border-left: 4px solid var(--primary);
+    border-radius: 0.5rem;
+    background: var(--muted);
+    color: var(--ink);
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Printing (the A4 risk report): A4 pages, no site header or buttons. */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}
