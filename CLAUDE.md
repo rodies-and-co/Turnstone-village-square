@@ -85,7 +85,7 @@ These rules are permanent. Follow them in every change.
 ## Look and feel
 
 - Turnstone colours and logo (shared with The Family Square). Logo file:
-  `public/turnstone-logo.png`.
+  `public/Turnstone-Logo.jpg`.
 - Keep navigation simple: one to-do list (with views), no scattered duplicates.
 - The family's governing document is always called the "Family Constitution".
 

@@ -14,9 +14,9 @@ export function SiteHeader({
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-3">
         <Link href="/" className="flex min-h-11 items-center gap-3 text-ink">
-          {/* The Turnstone logo. Put the file at public/turnstone-logo.png. */}
+          {/* The Turnstone logo: public/Turnstone-Logo.jpg */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/turnstone-logo.png" alt="Turnstone" className="h-9 w-auto" />
+          <img src="/Turnstone-Logo.jpg" alt="Turnstone" className="h-9 w-auto" />
           <span className="text-lg font-semibold">Village Square</span>
         </Link>
         {name && (
