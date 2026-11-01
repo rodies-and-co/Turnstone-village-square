@@ -99,10 +99,11 @@ export function AppShell({
               <Later>The Vault</Later>
             </ul>
           </div>
-          {/* Areas still to be built fold away, so the menu stays short. */}
+          {/* Areas still to be built fold away, so the menu stays short. Only
+              one opens at a time: opening one closes the others (they share a name). */}
           <div className="space-y-1">
             {LATER_GROUPS.map(([group, items]) => (
-              <details key={group} className="group">
+              <details key={group} name="side-menu-areas" className="group">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-1 font-semibold text-ink-2 hover:bg-muted [&::-webkit-details-marker]:hidden">
                   {group}
                   <span aria-hidden="true" className="text-sm transition-transform group-open:rotate-90">
