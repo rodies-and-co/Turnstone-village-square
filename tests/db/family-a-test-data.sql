@@ -86,3 +86,29 @@ insert into public.appointments (entity_id, role, person_id, organisation_id) va
   ('a9000000-0000-4000-8000-000000000001', 'director', 'a2000000-0000-4000-8000-000000000001', null),
   ('a9000000-0000-4000-8000-000000000001', 'director', 'a2000000-0000-4000-8000-000000000002', null),
   ('a9000000-0000-4000-8000-000000000002', 'trustee', null, 'a8000000-0000-4000-8000-000000000001');
+
+-- Ownership: Test Holdings Ltd has 1,000 authorised Ordinary shares of £1;
+-- 100 issued to the North person and 50 to the trust company (approved),
+-- and a draft issue of 10 to the trust company, prepared by the Administrator.
+-- The North Family Trust: settled by the North person; the South person is a
+-- beneficiary, and the North person is in the class "Descendants".
+insert into public.share_classes (id, entity_id, name, currency, par_value) values
+  ('aa000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000001', 'Ordinary', 'GBP', 1);
+insert into public.share_transactions
+  (id, entity_id, class_id, kind, transaction_date, shares, to_person_id, to_organisation_id, certificate_number, status, prepared_by, approved_by, approved_at) values
+  ('ab000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000001', 'aa000000-0000-4000-8000-000000000001', 'authorise', '2020-01-01', 1000, null, null, null,
+   'approved', '40000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', now()),
+  ('ab000000-0000-4000-8000-000000000002', 'a9000000-0000-4000-8000-000000000001', 'aa000000-0000-4000-8000-000000000001', 'issue', '2020-01-02', 100,
+   'a2000000-0000-4000-8000-000000000001', null, '1', 'approved', '40000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', now()),
+  ('ab000000-0000-4000-8000-000000000003', 'a9000000-0000-4000-8000-000000000001', 'aa000000-0000-4000-8000-000000000001', 'issue', '2020-01-02', 50,
+   null, 'a8000000-0000-4000-8000-000000000001', '2', 'approved', '40000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', now()),
+  ('ab000000-0000-4000-8000-000000000004', 'a9000000-0000-4000-8000-000000000001', 'aa000000-0000-4000-8000-000000000001', 'issue', '2021-01-02', 10,
+   null, 'a8000000-0000-4000-8000-000000000001', '3', 'draft', '40000000-0000-4000-8000-000000000001', null, null);
+insert into public.settlements (entity_id, kind, person_id, settled_on, description, amount, currency) values
+  ('a9000000-0000-4000-8000-000000000002', 'initial', 'a2000000-0000-4000-8000-000000000001', '2019-06-01', 'Cash', 100, 'ZAR');
+insert into public.beneficiaries (entity_id, person_id) values
+  ('a9000000-0000-4000-8000-000000000002', 'a2000000-0000-4000-8000-000000000002');
+insert into public.beneficiary_classes (id, entity_id, name) values
+  ('ac000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000002', 'Descendants');
+insert into public.beneficiary_class_members (entity_id, class_id, person_id) values
+  ('a9000000-0000-4000-8000-000000000002', 'ac000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001');

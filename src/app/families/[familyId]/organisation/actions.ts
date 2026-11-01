@@ -41,6 +41,8 @@ function orgError(message: string | undefined) {
   if (/entities_name/.test(m)) return "There is already an entity with that name.";
   if (/outside_organisations_name/.test(m)) return "There is already an outside organisation with that name. Choose it from the list instead.";
   if (/appointments_current/.test(m)) return "They already hold that role.";
+  if (/foreign key/.test(m) && /share_transactions|settlements|beneficiar/.test(m))
+    return "This entity holds shares in, settled, or benefits from another of the family's entities. Those are kept as records, so it can't be removed.";
   if (/base_currency/.test(m)) return "The currency should be three capital letters, e.g. GBP.";
   return friendlyError(m);
 }

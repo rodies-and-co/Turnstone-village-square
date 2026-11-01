@@ -88,7 +88,9 @@ own new project.
    project needs every one of these files, run once.
 7. Practice families only: run `supabase/setup/7-practice-tree-update.sql` to
    name the branches after their heads and add the family links, and
-   `supabase/setup/8-practice-organisation.sql` to add practice entities.
+   `supabase/setup/8-practice-organisation.sql` to add practice entities, then
+   `supabase/setup/9-practice-ownership.sql` to add practice share capital,
+   settlors and beneficiaries.
 
 The hub also gets later files: run every file in `supabase/hub/migrations`
 after the foundation, oldest first, once, in the hub project (for example the

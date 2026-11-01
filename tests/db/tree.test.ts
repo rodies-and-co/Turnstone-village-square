@@ -303,9 +303,20 @@ describe("branches are named after the person who heads them", () => {
         HARTLEY_DB.northPerson,
         HARTLEY_DB.northBranch,
       ]);
+      await clearOwnership(db); // a shareholder or settlor can't be removed from the Tree
       await db.query("delete from people where id = $1", [HARTLEY_DB.northPerson]);
       const { rows } = await db.query("select name, head_person_id from branches where id = $1", [HARTLEY_DB.northBranch]);
       expect(rows[0]).toEqual({ name: "Arthur Hartley Branch", head_person_id: null });
     });
   });
 });
+
+// The North and South people hold shares, settled a trust or benefit from it in the test data; those
+// records are cleared first, as the database won't remove someone who still
+// appears in a share register, or as a settlor or beneficiary.
+async function clearOwnership(db: import("pg").Client) {
+  await db.query("delete from share_transactions");
+  await db.query("delete from settlements");
+  await db.query("delete from beneficiaries");
+  await db.query("delete from beneficiary_class_members");
+}

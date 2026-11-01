@@ -157,7 +157,7 @@ export function setupChecklist(entity: ChecklistEntity, appointments: CurrentApp
     items.push({
       label: "Share capital currency",
       ok: Boolean(entity.base_currency),
-      detail: entity.base_currency ? `${entity.base_currency}. The share register comes with the Ownership step.` : "Required: the currency of the shares, which becomes the company's base currency.",
+      detail: entity.base_currency ? `${entity.base_currency}.` : "Required: the currency of the shares, which becomes the company's base currency.",
     });
   }
 

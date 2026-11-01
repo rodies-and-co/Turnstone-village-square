@@ -96,6 +96,7 @@ describe("family database: roles", () => {
   it("a Manager can remove people and manage access grants", async () => {
     const s = await signedIn(USERS.hartleyManager);
     await as(hartley, s, async (db) => {
+      await db.query("delete from beneficiaries"); // a beneficiary can't be removed from the Tree
       expect((await db.query("delete from people where id = $1", [HARTLEY_DB.southPerson])).rowCount).toBe(1);
       await db.query("insert into access_grants (user_id, scope) values ($1, 'whole_family')", [USERS.nobody]);
     });

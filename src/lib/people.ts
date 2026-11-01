@@ -406,6 +406,8 @@ export function friendlyError(message: string | undefined) {
   if (/person_details_check/.test(m)) return "The date of death can't be before the date of birth.";
   if (/two birth parents/.test(m)) return "A person can have at most two birth parents.";
   if (/Only a Manager/.test(m)) return m;
+  if (/foreign key/.test(m) && /share_transactions|settlements|beneficiar/.test(m))
+    return "They appear in a share register, or as a settlor, founder or beneficiary, which are kept as records, so they can't be removed. The Organisation shows where.";
   if (/duplicate key/.test(m)) return "That is already recorded.";
   if (/row-level security|permission denied/.test(m)) return "You don't have permission to do that.";
   if (/check constraint/.test(m)) return "Some of the details don't look right. Please check and try again.";

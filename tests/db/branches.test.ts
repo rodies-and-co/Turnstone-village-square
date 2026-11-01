@@ -90,6 +90,7 @@ describe("the Branches: keeping answers sound", () => {
   it("removing a person removes their wealth-creator mark and answers", async () => {
     await asOwner(hartley, async (db) => {
       await answerNo(db);
+      await clearOwnership(db); // a shareholder or settlor can't be removed from the Tree
       await db.query("delete from people where id = $1", [HARTLEY_DB.northPerson]);
       await db.query("delete from people where id = $1", [HARTLEY_DB.ownPerson]);
       expect(await count(db, "select * from wealth_creators")).toBe(0);
@@ -97,3 +98,13 @@ describe("the Branches: keeping answers sound", () => {
     });
   });
 });
+
+// The North and South people hold shares, settled a trust or benefit from it in the test data; those
+// records are cleared first, as the database won't remove someone who still
+// appears in a share register, or as a settlor or beneficiary.
+async function clearOwnership(db: import("pg").Client) {
+  await db.query("delete from share_transactions");
+  await db.query("delete from settlements");
+  await db.query("delete from beneficiaries");
+  await db.query("delete from beneficiary_class_members");
+}

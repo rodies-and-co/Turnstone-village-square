@@ -12,6 +12,7 @@ import { MONTHS_SHORT, STATUS_LABELS, boRuleText, type EntityStandard } from "@/
 import { EntityFields } from "../EntityFields";
 import { endAppointment, removeAppointment, removeEntity, setRegisteredOffice, updateEntity, addAppointment } from "../actions";
 import { AppointmentForm } from "./AppointmentForm";
+import { OwnershipTab } from "./OwnershipTab";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +33,12 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 
 const LATER: Partial<Record<Tab, string>> = {
-  ownership: "Share capital, the register of members, settlors, beneficiaries and beneficial owners come in the next step (Ownership).",
-  registers: "The statutory registers come with the Ownership and Compliance steps.",
+  registers: "The statutory registers (members, officers, beneficial owners) are gathered here in the Compliance step. The register of members is on the Ownership & control tab.",
   compliance: "The filings calendar, worked out from the Entity Standard, comes in the Compliance step.",
   decisions: "Minutes, written resolutions and file notes come with Meetings, resolutions and notes.",
   todo: "This entity's items from the family's one to-do list come with Organising.",
   risks: "This entity's view of the family's one risk register comes with Risk Management.",
-  organogram: "The structure chart comes with the Ownership step.",
+  organogram: "The structure chart, drawn from the ownership recorded, comes in the Compliance step.",
   finances: "Assets, liabilities, and the income and capital pools come with Finances.",
   documents: "This entity's documents come with the Vault.",
 };
@@ -366,6 +366,8 @@ export default async function EntityPage({
           </>
         )}
 
+        {tab === "ownership" && <OwnershipTab ctx={ctx} familyId={familyId} entity={entity} names={names} rule={standard} />}
+
         {tab === "history" && <HistoryCard ctx={ctx} entityId={entityId} />}
 
         {LATER[tab] && (
@@ -380,7 +382,16 @@ export default async function EntityPage({
   );
 }
 
-const TABLE_LABELS: Record<string, string> = { entities: "Details", appointments: "Appointment" };
+const TABLE_LABELS: Record<string, string> = {
+  entities: "Details",
+  appointments: "Appointment",
+  share_classes: "Share class",
+  share_transactions: "Share transaction",
+  settlements: "Settlement",
+  beneficiaries: "Beneficiary",
+  beneficiary_classes: "Class of beneficiaries",
+  beneficiary_class_members: "Class member",
+};
 
 async function HistoryCard({ ctx, entityId }: { ctx: Awaited<ReturnType<typeof getFamilyContext>>; entityId: string }) {
   if (!ctx.canManage) {
