@@ -10,7 +10,7 @@ import { MobileMenu } from "@/components/MobileMenu";
 
 export type Crumb = [text: string, href?: string];
 
-type Section = "family-overview" | "tree" | null;
+type Section = "family-overview" | "tree" | "branches" | null;
 
 // The plan's areas. Only built ones are links; the rest say "later".
 const LATER_GROUPS: [string, string[]][] = [
@@ -85,7 +85,11 @@ export function AppShell({
                   The Tree
                 </NavLink>
               </li>
-              <Later>The Branches</Later>
+              <li>
+                <NavLink href={`/families/${family.id}/branches`} active={section === "branches"}>
+                  The Branches
+                </NavLink>
+              </li>
               <Later>The Organisation</Later>
               <Later>The Story</Later>
               <Later>The Vault</Later>
@@ -134,7 +138,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[16rem_1fr]">
-      <aside className="border-b border-border md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+      <aside className="border-b border-border bg-background md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
         <div className="flex items-center justify-between gap-3 px-4 py-4 md:block md:px-4 md:pt-6">
           <Link href="/" className="block min-h-11">
             {/* The Turnstone logo: public/Turnstone-Logo.jpg */}

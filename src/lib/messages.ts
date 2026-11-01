@@ -14,6 +14,16 @@ export const SAVED_MESSAGES = {
   links_added: "Family links added. They show on everyone's records.",
   tax_added: "Tax number added.",
   removed: "Removed.",
+  link_added_branch_question: "Saved. A question is waiting on the Branches page: does this child of a wealth creator start a branch?",
+  wealth_creator_added: "Wealth creator confirmed. Their children's branch questions are on this page.",
+  wealth_creator_removed: "No longer marked as a wealth creator.",
+  branch_created: "Branch created and named after its head.",
+  answer_saved: "Answer saved. That question won't be asked again.",
+  question_reopened: "The question will be asked again.",
+  member_added: "Added to the branch.",
+  member_removed: "Taken out of the branch.",
+  branch_renamed: "Branch renamed.",
+  branch_removed: "Branch removed. Its members are still in the Tree, without a branch.",
 } as const;
 
 export type SavedCode = keyof typeof SAVED_MESSAGES;

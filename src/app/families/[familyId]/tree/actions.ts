@@ -201,6 +201,26 @@ export async function removePersonAddress(familyId: string, personId: string, id
 // Family links
 // ---------------------------------------------------------------------------
 
+// When a child is added to a wealth creator, the Branches page asks whether
+// that child starts a branch. Tell the person so straight away. Same rules as
+// the Branches page: birth or adoptive link, a family member, not already
+// heading a branch, and not already answered "No".
+async function branchQuestionFor(
+  db: NonNullable<NonNullable<Awaited<ReturnType<typeof editorContext>>>["db"]>,
+  parents: string[],
+  child: string,
+  kind: string,
+) {
+  if (kind !== "birth" && kind !== "adopted") return false;
+  const [{ data: creators }, { data: heads }, { data: person }, { data: answered }] = await Promise.all([
+    db.from("wealth_creators").select("person_id").in("person_id", parents),
+    db.from("branches").select("id").eq("head_person_id", child).limit(1),
+    db.from("people").select("member_type").eq("id", child).maybeSingle(),
+    db.from("branch_answers").select("id").eq("person_id", child).eq("question", "starts_branch").limit(1),
+  ]);
+  return Boolean((creators ?? []).length) && !(heads ?? []).length && person?.member_type !== "non_family" && !(answered ?? []).length;
+}
+
 // One family link is stored once and shows on both people's records: "Parent
 // of" on one is "Child of" on the other, and a spouse or partner shows on both.
 export async function addLink(familyId: string, personId: string, form: FormData) {
@@ -236,12 +256,12 @@ export async function addLink(familyId: string, personId: string, form: FormData
       if (!partnership) done(familyId, personId, tab, "The first link was added. The second parent wasn't, because they aren't recorded as a current spouse or partner.");
       // Already recorded as a parent? Then there is nothing more to add.
       const { data: already } = await db.from("parent_child").select("id").eq("parent_id", second).eq("child_id", child).maybeSingle();
-      if (already) done(familyId, personId, tab, undefined, "link_added");
+      if (already) done(familyId, personId, tab, undefined, (await branchQuestionFor(db, [parent, second], child, kind)) ? "link_added_branch_question" : "link_added");
       const { error: e2 } = await db.from("parent_child").insert({ parent_id: second, child_id: child, kind });
       if (e2) done(familyId, personId, tab, `The first link was added, but not the second parent: ${friendlyError(e2.message)}`);
-      done(familyId, personId, tab, undefined, "links_added");
+      done(familyId, personId, tab, undefined, (await branchQuestionFor(db, [parent, second], child, kind)) ? "link_added_branch_question" : "links_added");
     }
-    done(familyId, personId, tab, undefined, "link_added");
+    done(familyId, personId, tab, undefined, (await branchQuestionFor(db, [parent], child, kind)) ? "link_added_branch_question" : "link_added");
   }
 
   if (relation === "partner_of") {

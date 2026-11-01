@@ -73,6 +73,11 @@ export default async function FamilyPage({ params }: { params: Promise<{ familyI
               {people} {people === 1 ? "person" : "people"} you can see, in {branches.length}{" "}
               {branches.length === 1 ? "branch" : "branches"}.
             </p>
+            <p className="mt-3">
+              <Link href={`/families/${familyId}/branches`} className="underline">
+                Open the Branches
+              </Link>
+            </p>
             {branches.length > 0 && (
               <ul className="mt-4 divide-y divide-border border-y border-border">
                 {branches.map((b) => (

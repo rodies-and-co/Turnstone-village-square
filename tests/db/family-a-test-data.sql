@@ -51,3 +51,6 @@ insert into public.partnerships (person_a, person_b, kind, start_date) values
 insert into public.parent_child (parent_id, child_id) values
   ('a2000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000003'),
   ('a2000000-0000-4000-8000-000000000002', 'a2000000-0000-4000-8000-000000000003');
+
+-- The Branches: Arthur (North) is confirmed as a wealth creator.
+insert into public.wealth_creators (person_id) values ('a2000000-0000-4000-8000-000000000001');
