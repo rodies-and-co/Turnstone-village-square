@@ -22,14 +22,18 @@ export function RelationshipForm({
   people,
   existing,
   currentPartners,
+  fixed,
 }: {
   action: (form: FormData) => Promise<void>;
   me: P;
   people: P[];
   existing: { parents: string[]; children: string[]; partners: string[] };
   currentPartners: Record<string, string[]>;
+  // When set, the form is for one kind of link only (e.g. "Add a parent") and
+  // the choice of relationship is not shown.
+  fixed?: Relation;
 }) {
-  const [relation, setRelation] = useState<Relation | null>(null);
+  const [relation, setRelation] = useState<Relation | null>(fixed ?? null);
   const [otherId, setOtherId] = useState("");
   const [kind, setKind] = useState("birth");
   const [ended, setEnded] = useState(false);
@@ -79,14 +83,17 @@ export function RelationshipForm({
 
   return (
     <form action={action} className="space-y-5">
+      {fixed ? (
+        <input type="hidden" name="relation" value={fixed} />
+      ) : (
       <fieldset>
         <legend className="mb-2 font-medium text-ink">{me.name} is the…</legend>
         <div className="grid gap-3 sm:grid-cols-3">
           {RELATIONS.map(([value, title, hint]) => (
             <label
               key={value}
-              className={`flex min-h-11 cursor-pointer flex-col rounded-xl border-2 px-4 py-3 text-ink ${
-                relation === value ? "border-primary bg-muted" : "border-border bg-card hover:bg-muted"
+              className={`flex min-h-11 cursor-pointer flex-col rounded-lg border-2 px-4 py-3 text-ink ${
+                relation === value ? "border-primary bg-card" : "border-border bg-field hover:bg-muted"
               }`}
             >
               <span className="flex items-center gap-2 font-semibold">
@@ -109,11 +116,12 @@ export function RelationshipForm({
           ))}
         </div>
       </fieldset>
+      )}
 
       {relation && (
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
-            <label htmlFor="other_id" className="mb-1 block font-medium text-ink">
+            <label htmlFor="other_id" className="mb-1 block text-sm font-medium text-ink">
               {relation === "parent_of" ? "Parent of whom?" : relation === "child_of" ? "Child of whom?" : "Spouse / Partner of whom?"} (required)
             </label>
             <select id="other_id" name="other_id" required value={otherId} onChange={(e) => setOtherId(e.target.value)} className="text-input">
@@ -124,12 +132,12 @@ export function RelationshipForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-sm text-ink">The person must already be in the Tree. Add them first if they aren&apos;t.</p>
+            <p className="mt-1 text-xs text-ink-3">The person must already be in the Tree. Add them first if they aren&apos;t.</p>
           </div>
 
           {(relation === "parent_of" || relation === "child_of") && (
             <div>
-              <label htmlFor="parent_kind" className="mb-1 block font-medium text-ink">
+              <label htmlFor="parent_kind" className="mb-1 block text-sm font-medium text-ink">
                 Kind of {relation === "parent_of" ? "parent" : "child"}
               </label>
               <select id="parent_kind" name="parent_kind" value={kind} onChange={(e) => setKind(e.target.value)} className="text-input">
@@ -145,7 +153,7 @@ export function RelationshipForm({
           {relation === "partner_of" && (
             <>
               <div>
-                <label htmlFor="partnership_kind" className="mb-1 block font-medium text-ink">
+                <label htmlFor="partnership_kind" className="mb-1 block text-sm font-medium text-ink">
                   Married or partners?
                 </label>
                 <select id="partnership_kind" name="partnership_kind" defaultValue="marriage" className="text-input">
@@ -157,7 +165,7 @@ export function RelationshipForm({
                 </select>
               </div>
               <div>
-                <label htmlFor="start_date" className="mb-1 block font-medium text-ink">
+                <label htmlFor="start_date" className="mb-1 block text-sm font-medium text-ink">
                   Date married or started
                 </label>
                 <input id="start_date" name="start_date" type="date" className="text-input" />
@@ -169,13 +177,13 @@ export function RelationshipForm({
               {ended && (
                 <>
                   <div>
-                    <label htmlFor="end_date" className="mb-1 block font-medium text-ink">
+                    <label htmlFor="end_date" className="mb-1 block text-sm font-medium text-ink">
                       Date it ended (required)
                     </label>
                     <input id="end_date" name="end_date" type="date" required className="text-input" />
                   </div>
                   <div>
-                    <label htmlFor="end_reason" className="mb-1 block font-medium text-ink">
+                    <label htmlFor="end_reason" className="mb-1 block text-sm font-medium text-ink">
                       Why it ended (required)
                     </label>
                     <select id="end_reason" name="end_reason" required defaultValue="" className="text-input">
@@ -195,7 +203,7 @@ export function RelationshipForm({
       )}
 
       {other && second && !secondAlreadyParent && (relation === "parent_of" || relation === "child_of") && (
-        <label className="flex min-h-11 items-center gap-3 rounded-xl bg-muted px-4 text-ink">
+        <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-card px-4 py-2 text-sm text-ink">
           <input type="checkbox" name="also_parent" value={second.id} className="h-5 w-5" />
           Also record {second.name} ({relation === "parent_of" ? `${me.name}'s` : `${other.name}'s`} spouse / partner) as a{" "}
           {kindWord} parent of {relation === "parent_of" ? other.name : me.name}
@@ -208,14 +216,14 @@ export function RelationshipForm({
         </p>
       )}
       {preview && !blocked && (
-        <p className="rounded-xl border border-border px-4 py-3 text-ink" aria-live="polite">
+        <p className="text-sm text-ink-2" aria-live="polite">
           {preview}
         </p>
       )}
 
       {relation && !blocked && (
         <SubmitButton variant="primary" pendingText="Adding…">
-          Add relationship
+          {fixed === "child_of" ? "Add parent" : fixed === "parent_of" ? "Add child" : fixed === "partner_of" ? "Add marriage or partnership" : "Add relationship"}
         </SubmitButton>
       )}
     </form>

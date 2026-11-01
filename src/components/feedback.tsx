@@ -25,7 +25,7 @@ export function SubmitButton({
 }: {
   children: ReactNode;
   pendingText?: string;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "quiet";
   ariaLabel?: string;
 }) {
   const { pending } = useFormStatus();
@@ -35,7 +35,7 @@ export function SubmitButton({
       disabled={pending}
       aria-busy={pending}
       aria-label={pending ? undefined : ariaLabel}
-      className={variant === "primary" ? "btn-primary" : "btn-secondary"}
+      className={variant === "primary" ? "btn-primary" : variant === "quiet" ? "btn-quiet" : "btn-secondary"}
     >
       {pending && <Spinner />}
       {pending ? pendingText : children}
@@ -69,7 +69,7 @@ export function ConfirmRemove({
       <button
         ref={removeRef}
         type="button"
-        className="btn-secondary"
+        className="btn-quiet"
         aria-label={`${label} ${what}`}
         onClick={() => {
           setMoved(true);
@@ -121,13 +121,13 @@ export function Toast({ message, kind = "success" }: { message: string; kind?: "
     <div role={kind === "error" ? "alert" : "status"} aria-live={kind === "error" ? "assertive" : "polite"}>
       {shown && (
         <div
-          className={`toast fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border-2 px-4 py-3 shadow-lg sm:inset-x-auto sm:right-6 sm:bottom-6 ${
-            kind === "error" ? "border-primary bg-card" : "border-ink bg-card"
+          className={`toast fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border px-4 py-3 shadow-lg sm:inset-x-auto sm:right-6 sm:bottom-6 ${
+            kind === "error" ? "border-primary bg-field" : "border-border bg-field"
           }`}
         >
           <span
             aria-hidden="true"
-            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-bold ${kind === "error" ? "bg-primary text-ink" : "bg-ink text-card"}`}
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-bold ${kind === "error" ? "bg-primary text-ink" : "bg-ink text-white"}`}
           >
             {kind === "error" ? "!" : "✓"}
           </span>
@@ -135,7 +135,7 @@ export function Toast({ message, kind = "success" }: { message: string; kind?: "
             <span className="sr-only">{kind === "error" ? "Not saved: " : "Done: "}</span>
             {message}
           </p>
-          <button type="button" onClick={() => setOpen(false)} className="btn-secondary" aria-label="Close message">
+          <button type="button" onClick={() => setOpen(false)} className="btn-quiet" aria-label="Close message">
             ✕
           </button>
         </div>

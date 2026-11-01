@@ -1,14 +1,21 @@
 @import "tailwindcss";
 
-/* Turnstone colour palette (shared with The Family Square). See CLAUDE.md. */
+/* Turnstone look and feel, matched to The Family Square (live version 0.47):
+   IBM Plex fonts, warm beige panels, dark main buttons, orange accents.
+   Every text colour below passes WCAG AA (4.5:1) on the page and on panels. */
 :root {
-  --primary: #f15133;
-  --ink: #1a1816;
-  --background: #fcfaf6;
-  --card: #fefdfb;
-  --border: #eae0d2;
-  --muted: #f0eae2;
-  --bronze: #ecceb2;
+  --primary: #f15133; /* Turnstone orange: accents, active marks, focus */
+  --accent-text: #b23a1f; /* orange for small text (passes contrast) */
+  --ink: #1a1816; /* main text and main buttons */
+  --ink-2: #4a443e; /* secondary text */
+  --ink-3: #5f574f; /* hints and small print */
+  --background: #faf8f4; /* page */
+  --card: #f2ece3; /* panels */
+  --field: #ffffff; /* form fields */
+  --border: #e3d8c9; /* panel edges and row lines */
+  --field-border: #9a8770; /* form field edges (3:1 against white) */
+  --muted: #ebe3d7; /* hover */
+  --bronze: #ecceb2; /* labels and badges */
 
   /* Risk ratings. Always used with dark ink text (all pass WCAG AA). */
   --risk-low: #d9eed3;
@@ -19,13 +26,18 @@
 
 @theme inline {
   --color-primary: var(--primary);
+  --color-accent: var(--accent-text);
   --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
   --color-background: var(--background);
   --color-card: var(--card);
+  --color-field: var(--field);
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-bronze: var(--bronze);
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 
 body {
@@ -34,112 +46,142 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Buttons: dark ink text on orange, and at least 44px touch targets. */
+h1,
+h2 {
+  letter-spacing: -0.02em;
+}
+
 @layer components {
+  /* Main button: dark ink with white text. At least 44px to touch. */
   .btn-primary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.5rem;
     min-height: 44px;
     min-width: 44px;
-    padding: 0 1.25rem;
-    border-radius: 0.5rem;
-    background: var(--primary);
-    color: var(--ink);
-    font-weight: 600;
+    padding: 0 1rem;
+    border-radius: 6px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    transition: transform 80ms ease, background-color 120ms ease;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #33302c;
   }
 
-  .btn-primary:focus-visible {
-    outline: 3px solid var(--ink);
-    outline-offset: 2px;
-  }
-}
-
-@layer components {
+  /* Second button: outlined. */
   .btn-secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.5rem;
     min-height: 44px;
     min-width: 44px;
     padding: 0 1rem;
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    background: var(--card);
+    border: 1px solid var(--field-border);
+    border-radius: 6px;
+    background: transparent;
     color: var(--ink);
+    font-size: 15px;
     font-weight: 500;
-  }
-
-  .btn-primary:disabled,
-  .btn-secondary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  /* Pressed buttons give an immediate response. */
-  .btn-primary,
-  .btn-secondary {
-    gap: 0.5rem;
     transition: transform 80ms ease, background-color 120ms ease;
-  }
-  .btn-primary:active:not(:disabled),
-  .btn-secondary:active:not(:disabled) {
-    transform: scale(0.97);
   }
   .btn-secondary:hover:not(:disabled) {
     background: var(--muted);
   }
 
-  /* Confirmation messages after saving: slide in at the bottom of the screen. */
-  .toast {
-    animation: toast-in 200ms ease-out;
-  }
-  @keyframes toast-in {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .toast,
-    .btn-primary,
-    .btn-secondary {
-      animation: none;
-      transition: none;
-    }
-  }
-
-  .text-input {
-    display: block;
-    width: 100%;
+  /* Quiet text button, e.g. "Remove" on a row. Still 44px to touch. */
+  .btn-quiet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     min-height: 44px;
-    padding: 0 0.75rem;
-    border: 1px solid var(--ink);
-    border-radius: 0.5rem;
-    background: var(--card);
+    min-width: 44px;
+    padding: 0 0.6rem;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .btn-quiet:hover:not(:disabled) {
+    background: var(--muted);
     color: var(--ink);
   }
 
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .btn-quiet:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .btn-primary:disabled,
+  .btn-secondary:disabled,
+  .btn-quiet:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .text-input,
   .text-area {
     display: block;
     width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--ink);
-    border-radius: 0.5rem;
-    background: var(--card);
+    min-height: 44px;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--field-border);
+    border-radius: 6px;
+    background: var(--field);
     color: var(--ink);
+    font-size: 15px;
   }
 
+  .btn-primary:focus-visible,
   .btn-secondary:focus-visible,
+  .btn-quiet:focus-visible,
   .text-input:focus-visible,
   .text-area:focus-visible,
+  summary:focus-visible,
   a:focus-visible {
     outline: 3px solid var(--primary);
     outline-offset: 2px;
+  }
+
+  /* Small orange capitals above a heading, e.g. "THE TREE". */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+  }
+
+  /* A fold-out, e.g. "▸ Add a parent". Only opens when asked. */
+  .fold > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+  .fold > summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform 120ms ease;
+  }
+  .fold[open] > summary::before {
+    transform: rotate(90deg);
+  }
+  .fold-danger > summary {
+    color: var(--accent-text);
   }
 
   .risk-low {
@@ -161,14 +203,40 @@ body {
 
   .alert {
     border-left: 4px solid var(--primary);
-    border-radius: 0.5rem;
-    background: var(--muted);
+    border-radius: 6px;
+    background: var(--card);
     color: var(--ink);
     padding: 0.75rem 1rem;
   }
+
+  /* Confirmation messages after saving: slide in at the bottom of the screen. */
+  .toast {
+    animation: toast-in 200ms ease-out;
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
-/* Printing (the A4 risk report): A4 pages, no site header or buttons. */
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .btn-primary,
+  .btn-secondary,
+  .btn-quiet,
+  .fold > summary::before {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Printing: A4 pages, no menus or buttons. */
 @media print {
   @page {
     size: A4;

@@ -86,6 +86,10 @@ These rules are permanent. Follow them in every change.
 
 - Turnstone colours and logo (shared with The Family Square). Logo file:
   `public/Turnstone-Logo.jpg`.
+- Layout follows The Family Square (family-governance.vercel.app): a side
+  menu with the logo and the family, breadcrumbs, IBM Plex fonts, beige
+  panels, dark main buttons, quiet "Remove" links, and fold-outs ("▸ Add a
+  parent") so each small form only shows the fields that apply. Not Lovable.
 - Keep navigation simple: one to-do list (with views), no scattered duplicates.
 - The family's governing document is always called the "Family Constitution".
 - Every button gives feedback: it shows it is working straight away (e.g.

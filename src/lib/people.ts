@@ -125,6 +125,97 @@ export function siblingKinds(
   return out;
 }
 
+// Which generation each person belongs to, worked out from family links, as
+// in The Family Square's register: 1 = the founders. Someone without parents
+// in the Tree takes their spouse's or partner's generation, and otherwise
+// counts as the first generation if they have children. Someone with no
+// links at all gets null ("not linked yet").
+export function generations(
+  ids: string[],
+  links: { parent_id: string; child_id: string }[],
+  partnerships: { person_a: string; person_b: string }[],
+): Map<string, number | null> {
+  const known = new Set(ids);
+  const parentsOf = new Map<string, string[]>();
+  const hasChildren = new Set<string>();
+  for (const l of links) {
+    if (!known.has(l.parent_id) || !known.has(l.child_id)) continue;
+    parentsOf.set(l.child_id, [...(parentsOf.get(l.child_id) ?? []), l.parent_id]);
+    hasChildren.add(l.parent_id);
+  }
+  const partnersOf = new Map<string, string[]>();
+  for (const p of partnerships) {
+    if (!known.has(p.person_a) || !known.has(p.person_b)) continue;
+    partnersOf.set(p.person_a, [...(partnersOf.get(p.person_a) ?? []), p.person_b]);
+    partnersOf.set(p.person_b, [...(partnersOf.get(p.person_b) ?? []), p.person_a]);
+  }
+
+  const byBlood = new Map<string, number | null>();
+  const blood = (id: string, seen: Set<string>): number | null => {
+    if (byBlood.has(id)) return byBlood.get(id)!;
+    if (seen.has(id)) return null;
+    seen.add(id);
+    const parents = parentsOf.get(id) ?? [];
+    let g: number | null = null;
+    if (parents.length) {
+      const ups = parents.map((p) => blood(p, seen) ?? marriedIn(p) ?? 1);
+      g = Math.max(...ups) + 1;
+    }
+    byBlood.set(id, g);
+    return g;
+  };
+  const marriedIn = (id: string): number | null => {
+    for (const partner of partnersOf.get(id) ?? []) {
+      const g = blood(partner, new Set());
+      if (g !== null) return g;
+    }
+    return null;
+  };
+
+  const out = new Map<string, number | null>();
+  for (const id of ids) {
+    const g = blood(id, new Set()) ?? marriedIn(id) ?? (hasChildren.has(id) || partnersOf.has(id) ? 1 : null);
+    out.set(id, g);
+  }
+  return out;
+}
+
+const ORDINALS = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth"];
+export function generationName(g: number | null) {
+  if (g === null) return "Not linked to the family yet";
+  return `${ORDINALS[g - 1] ?? `${g}th`} generation`;
+}
+
+// One line about a person's marriage or partnership, e.g. "Married to Lies".
+// Current ones first; otherwise the most recent that ended.
+export function partnershipLine(
+  personId: string,
+  partnerships: { person_a: string; person_b: string; kind: string; end_date: string | null; end_reason: string | null; start_date: string | null }[],
+  nameOf: (id: string) => string,
+): string | null {
+  const mine = partnerships.filter((p) => p.person_a === personId || p.person_b === personId);
+  if (!mine.length) return null;
+  const current = mine.filter((p) => !p.end_date);
+  const pick = current[0] ?? [...mine].sort((a, b) => (b.end_date ?? "").localeCompare(a.end_date ?? ""))[0];
+  const other = nameOf(pick.person_a === personId ? pick.person_b : pick.person_a);
+  if (!pick.end_date) {
+    return pick.kind === "marriage" ? `Married to ${other}` : pick.kind === "civil_partnership" ? `Civil partner of ${other}` : `Partner of ${other}`;
+  }
+  const year = pick.end_date.slice(0, 4);
+  if (pick.end_reason === "divorce") return `Divorced from ${other} (${year})`;
+  if (pick.end_reason === "separation") return `Separated from ${other} (${year})`;
+  if (pick.end_reason === "death") return `Widowed: was married to ${other}, who died in ${year}`;
+  return `Was with ${other} until ${year}`;
+}
+
+// "Born 1949, aged 77" or "Born 1946, deceased".
+export function lifeLine(p: { birth_year: number | null; deceased: boolean }, now = new Date()) {
+  if (!p.birth_year) return p.deceased ? "Deceased" : "Year of birth not known";
+  if (p.deceased) return `Born ${p.birth_year}, deceased`;
+  const age = now.getFullYear() - p.birth_year;
+  return `Born ${p.birth_year}, aged about ${age}`;
+}
+
 // ---------------------------------------------------------------------------
 // Form checks. Each returns { ok: true, value } or { ok: false, error } with a
 // message in plain English.

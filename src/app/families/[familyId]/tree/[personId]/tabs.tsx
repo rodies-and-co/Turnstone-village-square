@@ -1,10 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ConfirmRemove, SubmitButton } from "@/components/feedback";
-import { Card, Facts, Field, Notice, Select } from "@/components/ui";
+import { Card, Facts, Field, Fold, Notice, Row, Rows, Select } from "@/components/ui";
 import type { FamilyContext } from "@/lib/family-context";
 import {
-  siblingKinds,
   ADDRESS_KINDS,
   MEMBER_TYPES,
   PARENT_KINDS,
@@ -14,6 +13,8 @@ import {
   SEX_OPTIONS,
   THREE_CIRCLE_ROLES,
   formatAddress,
+  lifeLine,
+  siblingKinds,
 } from "@/lib/people";
 import { PersonFields } from "../PersonFields";
 import { RelationshipForm } from "./RelationshipForm";
@@ -33,6 +34,10 @@ import {
   saveDetails,
   updatePerson,
 } from "../actions";
+
+// The tabs of a person's record, laid out as in The Family Square: beige
+// panels, rows with a quiet "Remove", and fold-outs ("▸ Add a parent") so
+// each small form only shows when it is wanted.
 
 type Person = {
   id: string;
@@ -66,29 +71,32 @@ function formatDate(d: string | null | undefined) {
   return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-// A "Remove" button for one row, shown to Managers only. It asks first.
+// "Remove" on a row, for Managers only. It asks first.
 function RemoveButton({ action, what }: { action: () => Promise<void>; what: string }) {
   return <ConfirmRemove action={action} what={what} />;
 }
 
 function PrivateNote({ ctx }: { ctx: FamilyContext }) {
   if (ctx.canEdit) return null;
-  return (
-    <Notice>
-      Personal details are only shown to the family&apos;s Managers and Administrators, and to the person themself.
-    </Notice>
-  );
+  return <Notice>Personal details are only shown to the family&apos;s Managers and Administrators, and to the person themself.</Notice>;
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="border-y border-border py-3 text-ink-3">{children}</p>;
 }
 
 export function LaterTab({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card title={title}>
-      <p className="text-ink">{children}</p>
+      <p className="text-ink-2">{children}</p>
     </Card>
   );
 }
 
+const firstName = (p: Person) => p.known_as || p.full_names.split(/\s+/)[0];
+
 // ---------------------------------------------------------------------------
+// Overview: the details, edited in place by Managers and Administrators.
 
 export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
   const [{ data: branches }, { data: details }] = await Promise.all([
@@ -101,41 +109,42 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
 
   return (
     <>
-      <Card title="Overview">
-        <Facts
-          items={[
-            ["Full names", person.full_names],
-            ["Surname", person.surname],
-            ["Maiden name", person.maiden_name],
-            ["Known as", person.known_as],
-            ["Type of member", MEMBER_TYPES[person.member_type]],
-            ["Date of birth", dob ? formatDate(dob) : person.birth_year ? `${person.birth_year} (day and month not known)` : null],
-            ["Three circle role", label(THREE_CIRCLE_ROLES, person.three_circle_role)],
-            ["Branch", branchName],
-            ["Deceased", person.deceased ? "Yes" : "No"],
-            ["Uses the family portal", person.user_id ? "Yes" : "No"],
-          ]}
-        />
-      </Card>
-
-      {ctx.canEdit && (
-        <Card title="Edit overview">
-          <form action={updatePerson.bind(null, familyId, personId)} className="space-y-5">
+      {ctx.canEdit ? (
+        <Card title="Details">
+          <form action={updatePerson.bind(null, familyId, personId)} className="space-y-6">
             <PersonFields values={{ ...person, date_of_birth: dob }} branches={branches ?? []} canChooseBranch={ctx.canManage} />
             <SubmitButton>Save changes</SubmitButton>
           </form>
         </Card>
+      ) : (
+        <Card title="Details">
+          <Facts
+            items={[
+              ["Full names", person.full_names],
+              ["Surname", person.surname],
+              ["Known as", person.known_as],
+              ["Maiden name", person.maiden_name],
+              ["Type of member", MEMBER_TYPES[person.member_type]],
+              ["Year of birth", person.birth_year],
+              ["Three circle role", label(THREE_CIRCLE_ROLES, person.three_circle_role)],
+              ["Branch", branchName],
+              ["Deceased", person.deceased ? "Yes" : "No"],
+            ]}
+          />
+        </Card>
       )}
 
       {ctx.canManage && (
-        <Card title="Remove this person">
-          <p className="text-ink">
-            This removes the person and their personal details, addresses, documents and family links. The change is
-            recorded in the history. It can&apos;t be undone from here.
-          </p>
-          <div className="mt-4">
-            <ConfirmRemove action={removePerson.bind(null, familyId, personId)} what={`${person.known_as || person.full_names} from the Tree`} />
-          </div>
+        <Card title="Remove from the Tree">
+          <Fold label={`Remove ${firstName(person)} from the Tree`} danger>
+            <p className="text-sm text-ink-2">
+              This removes {firstName(person)} with their personal details, addresses, documents and family links. The change is
+              recorded in the history. It can&apos;t be undone from here.
+            </p>
+            <form action={removePerson.bind(null, familyId, personId)} className="mt-3">
+              <SubmitButton pendingText="Removing…">Yes, remove {firstName(person)}</SubmitButton>
+            </form>
+          </Fold>
         </Card>
       )}
     </>
@@ -143,6 +152,7 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
 }
 
 // ---------------------------------------------------------------------------
+// Identity: birth, sex, email, wealth and passports.
 
 export async function IdentityTab({ ctx, familyId, personId, person }: Props) {
   const db = ctx.db!;
@@ -152,45 +162,31 @@ export async function IdentityTab({ ctx, familyId, personId, person }: Props) {
   ]);
   const d = details ?? {};
   const canSee = ctx.canEdit || details || (passports ?? []).length > 0;
+  const dobText = formatDate(d.date_of_birth) ?? (person.birth_year ? `${person.birth_year} (day and month not known)` : "Not recorded");
 
   return (
     <>
       <PrivateNote ctx={ctx} />
-      {canSee && (
-        <Card title="Birth and personal details">
-          <Facts
-            items={[
-              [
-                "Date of birth",
-                formatDate(d.date_of_birth) ?? (person.birth_year ? `${person.birth_year} (day and month not known)` : null),
-              ],
-              ["Place of birth", [d.city_of_birth, d.country_of_birth].filter(Boolean).join(", ")],
-              ["Sex", label(SEX_OPTIONS, d.sex)],
-              ["Email", d.email],
-              ["Date of death", formatDate(d.date_of_death)],
-              ["Relationship to wealth", label(RELATIONSHIP_TO_WEALTH, d.relationship_to_wealth)],
-              ["Psychometric consent date", formatDate(d.psychometric_consent_date)],
-            ]}
-          />
-        </Card>
-      )}
-
-      {ctx.canEdit && (
-        <Card title="Edit personal details">
-          <p className="mb-4 text-sm text-ink">
-            The date of birth is changed under{" "}
-            <Link href={`/families/${familyId}/tree/${personId}?tab=overview`} className="underline">
-              Overview
-            </Link>
-            , so it is only entered once.
-          </p>
-          <form action={saveDetails.bind(null, familyId, personId)} className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
+      {ctx.canEdit ? (
+        <Card
+          title="Personal details"
+          description={
+            <>
+              Date of birth: <strong className="font-medium text-ink">{dobText}</strong>. It is entered once, under{" "}
+              <Link href={`/families/${familyId}/tree/${personId}?tab=overview`} className="underline">
+                Overview
+              </Link>
+              .
+            </>
+          }
+        >
+          <form action={saveDetails.bind(null, familyId, personId)} className="space-y-6">
+            <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
               <Select label="Sex" name="sex" options={SEX_OPTIONS} defaultValue={d.sex ?? "unspecified"} />
               <Field label="Town or city of birth" name="city_of_birth" defaultValue={d.city_of_birth} />
               <Field label="Country of birth" name="country_of_birth" defaultValue={d.country_of_birth} />
               <Field label="Email" name="email" type="email" defaultValue={d.email} />
-              <Field label="Date of death" name="date_of_death" type="date" defaultValue={d.date_of_death} />
+              <Field label="Date of death" name="date_of_death" type="date" defaultValue={d.date_of_death} hint="Leave empty if living." />
               <Select
                 label="Relationship to wealth"
                 name="relationship_to_wealth"
@@ -200,37 +196,49 @@ export async function IdentityTab({ ctx, familyId, personId, person }: Props) {
               />
               <Field label="Psychometric consent date" name="psychometric_consent_date" type="date" defaultValue={d.psychometric_consent_date} />
             </div>
-            <SubmitButton>Save personal details</SubmitButton>
+            <SubmitButton>Save changes</SubmitButton>
           </form>
         </Card>
+      ) : (
+        details && (
+          <Card title="Personal details">
+            <Facts
+              items={[
+                ["Date of birth", dobText],
+                ["Place of birth", [d.city_of_birth, d.country_of_birth].filter(Boolean).join(", ")],
+                ["Sex", label(SEX_OPTIONS, d.sex)],
+                ["Email", d.email],
+                ["Date of death", formatDate(d.date_of_death)],
+                ["Relationship to wealth", label(RELATIONSHIP_TO_WEALTH, d.relationship_to_wealth)],
+                ["Psychometric consent date", formatDate(d.psychometric_consent_date)],
+              ]}
+            />
+          </Card>
+        )
       )}
 
       {canSee && (
         <Card title="Passports">
           {(passports ?? []).length === 0 ? (
-            <p className="text-ink">No passports recorded.</p>
+            <Empty>None recorded.</Empty>
           ) : (
-            <ul className="divide-y divide-border">
+            <Rows>
               {(passports ?? []).map((p: { id: string; country: string; number: string; expires_on: string | null }) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <span className="text-ink">
-                    {p.country} · {p.number}
-                    {p.expires_on ? ` · expires ${formatDate(p.expires_on)}` : ""}
-                  </span>
-                  {ctx.canManage && (
-                    <RemoveButton action={removePassport.bind(null, familyId, personId, p.id)} what={`passport ${p.number}`} />
-                  )}
-                </li>
+                <Row key={p.id} title={`${p.country} · ${p.number}`} meta={p.expires_on ? `Expires ${formatDate(p.expires_on)}` : "Expiry not recorded"}>
+                  {ctx.canManage && <RemoveButton action={removePassport.bind(null, familyId, personId, p.id)} what={`passport ${p.number}`} />}
+                </Row>
               ))}
-            </ul>
+            </Rows>
           )}
           {ctx.canEdit && (
-            <form action={addPassport.bind(null, familyId, personId)} className="mt-4 grid gap-4 sm:grid-cols-4 sm:items-end">
-              <Field label="Country" name="country" required />
-              <Field label="Number" name="number" required />
-              <Field label="Expires" name="expires_on" type="date" />
-              <SubmitButton variant="secondary">Add passport</SubmitButton>
-            </form>
+            <Fold label="Add a passport">
+              <form action={addPassport.bind(null, familyId, personId)} className="grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+                <Field label="Country" name="country" required />
+                <Field label="Number" name="number" required />
+                <Field label="Expires" name="expires_on" type="date" />
+                <SubmitButton pendingText="Adding…">Add passport</SubmitButton>
+              </form>
+            </Fold>
           )}
         </Card>
       )}
@@ -239,6 +247,9 @@ export async function IdentityTab({ ctx, familyId, personId, person }: Props) {
 }
 
 // ---------------------------------------------------------------------------
+// Addresses and contact details.
+
+type Addr = { id: string; line1: string; line2: string | null; city: string; region: string | null; postal_code: string | null; country: string };
 
 export async function AddressesTab({ ctx, familyId, personId }: Props) {
   const db = ctx.db!;
@@ -253,87 +264,72 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
   const { data: details } = await db.from("person_details").select("email").eq("person_id", personId).maybeSingle();
   const canSee = ctx.canEdit || (links ?? []).length > 0 || (phones ?? []).length > 0 || details;
 
-  type Addr = { id: string; line1: string; line2: string | null; city: string; region: string | null; postal_code: string | null; country: string };
-
   return (
     <>
       <PrivateNote ctx={ctx} />
       {canSee && (
-        <Card title="Addresses">
+        <Card title="Addresses" description="Addresses are shared: if two people live at the same address, it is stored once.">
           {(links ?? []).length === 0 ? (
-            <p className="text-ink">No addresses recorded.</p>
+            <Empty>None recorded.</Empty>
           ) : (
-            <ul className="divide-y divide-border">
+            <Rows>
               {(links ?? []).map((l: { id: string; kind: string; addresses: Addr | Addr[] | null }) => {
                 const a = Array.isArray(l.addresses) ? l.addresses[0] : l.addresses;
                 return (
-                <li key={l.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <span className="text-ink">
-                    <strong>{label(ADDRESS_KINDS, l.kind)}:</strong> {a ? formatAddress(a) : "—"}
-                  </span>
-                  {ctx.canManage && (
-                    <RemoveButton action={removePersonAddress.bind(null, familyId, personId, l.id)} what="this address" />
-                  )}
-                </li>
+                  <Row key={l.id} title={a ? formatAddress(a) : "—"} meta={label(ADDRESS_KINDS, l.kind)}>
+                    {ctx.canManage && <RemoveButton action={removePersonAddress.bind(null, familyId, personId, l.id)} what="this address" />}
+                  </Row>
                 );
               })}
-            </ul>
+            </Rows>
           )}
-
           {ctx.canEdit && (
-            <form action={addAddress.bind(null, familyId, personId)} className="mt-6 space-y-4">
-              <h3 className="font-semibold text-ink">Add an address</h3>
-              <p className="text-sm text-ink">
-                Choose an address the family already has, or type a new one. A new address that matches an existing one
-                is reused, so it&apos;s never stored twice.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Select
-                  label="Existing address"
-                  name="address_id"
-                  options={(allAddresses ?? []).map((a: Addr) => [a.id, formatAddress(a)] as [string, string])}
-                  includeBlank="— Type a new address below —"
-                />
-                <Select label="Used as" name="kind" options={ADDRESS_KINDS} defaultValue="home" />
-                <Field label="First line" name="line1" />
-                <Field label="Second line" name="line2" />
-                <Field label="Town or city" name="city" />
-                <Field label="County, state or region" name="region" />
-                <Field label="Postcode" name="postal_code" />
-                <Field label="Country" name="country" />
-              </div>
-              <SubmitButton variant="secondary">Add address</SubmitButton>
-            </form>
+            <Fold label="Add an address">
+              <form action={addAddress.bind(null, familyId, personId)} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Select
+                    label="An address the family already has"
+                    name="address_id"
+                    options={(allAddresses ?? []).map((a: Addr) => [a.id, formatAddress(a)] as [string, string])}
+                    includeBlank="None: type a new address below"
+                  />
+                  <Select label="Used as" name="kind" options={ADDRESS_KINDS} defaultValue="home" />
+                </div>
+                <p className="text-sm text-ink-3">Or type a new one. If it matches an address already recorded, that one is used.</p>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="First line" name="line1" />
+                  <Field label="Second line" name="line2" />
+                  <Field label="Town or city" name="city" />
+                  <Field label="County, state or region" name="region" />
+                  <Field label="Postcode" name="postal_code" />
+                  <Field label="Country" name="country" />
+                </div>
+                <SubmitButton pendingText="Adding…">Add address</SubmitButton>
+              </form>
+            </Fold>
           )}
         </Card>
       )}
 
       {canSee && (
-        <Card title="Contact details">
-          <Facts items={[["Email", details?.email ?? null]]} />
-          <h3 className="mt-4 font-semibold text-ink">Telephone numbers</h3>
-          {(phones ?? []).length === 0 ? (
-            <p className="text-ink">None recorded.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {(phones ?? []).map((p: { id: string; label: string; number: string }) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <span className="text-ink">
-                    {p.label}: {p.number}
-                  </span>
-                  {ctx.canManage && <RemoveButton action={removePhone.bind(null, familyId, personId, p.id)} what={`phone ${p.number}`} />}
-                </li>
-              ))}
-            </ul>
-          )}
+        <Card title="Phone and email" description="The email address is changed under Identity.">
+          <Rows>
+            <Row title={details?.email ?? "No email recorded"} meta="Email" />
+            {(phones ?? []).map((p: { id: string; label: string; number: string }) => (
+              <Row key={p.id} title={p.number} meta={p.label}>
+                {ctx.canManage && <RemoveButton action={removePhone.bind(null, familyId, personId, p.id)} what={`phone ${p.number}`} />}
+              </Row>
+            ))}
+          </Rows>
           {ctx.canEdit && (
-            <form action={addPhone.bind(null, familyId, personId)} className="mt-4 grid gap-4 sm:grid-cols-3 sm:items-end">
-              <Field label="Label" name="label" defaultValue="Mobile" />
-              <Field label="Number" name="number" type="tel" required />
-              <SubmitButton variant="secondary">Add number</SubmitButton>
-            </form>
+            <Fold label="Add a phone number">
+              <form action={addPhone.bind(null, familyId, personId)} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <Field label="Label" name="label" defaultValue="Mobile" />
+                <Field label="Number" name="number" type="tel" required />
+                <SubmitButton pendingText="Adding…">Add number</SubmitButton>
+              </form>
+            </Fold>
           )}
-          <p className="mt-4 text-sm text-ink">The email address is edited under Identity.</p>
         </Card>
       )}
     </>
@@ -341,42 +337,7 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-
-type Kin = { key: string; personId: string; description: string; remove?: () => Promise<void>; removeWhat?: string };
-
-function KinGroup({ title, rows, empty, familyId, name, canManage, note }: {
-  title: string;
-  rows: Kin[];
-  empty: string;
-  familyId: string;
-  name: (id: string) => string;
-  canManage: boolean;
-  note?: string;
-}) {
-  return (
-    <div>
-      <h3 className="font-semibold text-ink">{title}</h3>
-      {rows.length === 0 ? (
-        <p className="mt-1 text-ink">{empty}</p>
-      ) : (
-        <ul className="mt-1 divide-y divide-border">
-          {rows.map((r) => (
-            <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-2">
-              <span className="text-ink">
-                <Link href={`/families/${familyId}/tree/${r.personId}?tab=relationships`} className="inline-flex min-h-11 items-center font-medium underline">
-                  {name(r.personId)}
-                </Link>{" "}
-                · {r.description}
-              </span>
-              {canManage && r.remove && <RemoveButton action={r.remove} what={r.removeWhat ?? "this link"} />}
-            </li>
-          ))}
-        </ul>
-      )}
-      {note && rows.length > 0 && <p className="mt-1 text-sm text-ink">{note}</p>}
-    </div>
-  );
-}
+// Family and roles: marriages, parents and children, brothers and sisters.
 
 type PartnerRow = { id: string; person_a: string; person_b: string; kind: string; start_date: string | null; end_date: string | null; end_reason: string | null };
 
@@ -402,49 +363,30 @@ export async function RelationshipsTab({ ctx, familyId, personId, person, everyo
   const { data: siblingParentLinks } = siblingIds.length
     ? await db.from("parent_child").select("parent_id, child_id, kind").in("child_id", siblingIds)
     : { data: [] };
-  const siblingRowsRaw = siblingKinds(
+  const siblings = siblingKinds(
     parents.map((l) => ({ parent_id: l.parent_id, kind: l.kind })),
     (siblingParentLinks ?? []) as { parent_id: string; child_id: string; kind: string }[],
-  );
+  )
+    .filter((r) => names.has(r.id))
+    .sort((a, b) => (names.get(a.id) ?? "").localeCompare(names.get(b.id) ?? ""));
 
+  const byId = new Map(everyone.map((p) => [p.id, p]));
   const name = (id: string) => names.get(id) ?? "Someone you can't see";
+  const life = (id: string) => {
+    const p = byId.get(id);
+    return p ? lifeLine(p) : undefined;
+  };
+  const personLink = (id: string) =>
+    names.has(id) ? (
+      <Link href={`/families/${familyId}/tree/${id}?tab=relationships`} className="hover:underline">
+        {name(id)}
+      </Link>
+    ) : (
+      name(id)
+    );
   const kindOf = (k: string) => label(PARENT_KINDS, k) ?? "";
 
-  const parentRows: Kin[] = parents.map((l) => ({
-    key: l.id,
-    personId: l.parent_id,
-    description: `${kindOf(l.kind)} parent`,
-    remove: removeParentLink.bind(null, familyId, personId, l.id),
-    removeWhat: `the link to ${name(l.parent_id)}`,
-  }));
-  const partnerRows: Kin[] = mine.map((l) => {
-    const other = l.person_a === personId ? l.person_b : l.person_a;
-    const bits = [
-      label(PARTNERSHIP_KINDS, l.kind),
-      l.start_date ? `from ${formatDate(l.start_date)}` : null,
-      l.end_date ? `ended ${formatDate(l.end_date)}${l.end_reason ? ` (${label(PARTNERSHIP_END_REASONS, l.end_reason)?.toLowerCase()})` : ""}` : "current",
-    ];
-    return {
-      key: l.id,
-      personId: other,
-      description: bits.filter(Boolean).join(" · "),
-      remove: removePartnership.bind(null, familyId, personId, l.id),
-      removeWhat: `the partnership with ${name(other)}`,
-    };
-  });
-  const childRows: Kin[] = children.map((l) => ({
-    key: l.id,
-    personId: l.child_id,
-    description: `${kindOf(l.kind)} child`,
-    remove: removeParentLink.bind(null, familyId, personId, l.id),
-    removeWhat: `the link to ${name(l.child_id)}`,
-  }));
-  const siblingRows: Kin[] = siblingRowsRaw
-    .filter((r) => names.has(r.id))
-    .map((r) => ({ key: r.id, personId: r.id, description: r.label }))
-    .sort((a, b) => name(a.personId).localeCompare(name(b.personId)));
-
-  // For the form: who is currently with whom.
+  // For the forms: who is currently with whom, and who can be chosen.
   const currentPartners: Record<string, string[]> = {};
   for (const l of partnerships.filter((x) => !x.end_date)) {
     (currentPartners[l.person_a] ??= []).push(l.person_b);
@@ -455,45 +397,116 @@ export async function RelationshipsTab({ ctx, familyId, personId, person, everyo
     .filter((p) => p.id !== personId)
     .map((p) => ({ id: p.id, name: names.get(p.id) ?? p.surname, birth_year: p.birth_year }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const existing = {
+    parents: parentIds,
+    children: children.map((l) => l.child_id),
+    partners: mine.map((l) => (l.person_a === personId ? l.person_b : l.person_a)),
+  };
+  const form = (fixed: "parent_of" | "child_of" | "partner_of") => (
+    <RelationshipForm
+      action={addLink.bind(null, familyId, personId)}
+      me={me}
+      people={people}
+      existing={existing}
+      currentPartners={currentPartners}
+      fixed={fixed}
+    />
+  );
 
-  const group = { familyId, name, canManage: ctx.canManage };
   return (
     <>
-      <Card title={`${me.name}'s family`}>
-        <div className="space-y-6">
-          <KinGroup title="Parents" rows={parentRows} empty="None recorded." {...group} />
-          <KinGroup title="Spouse / Partner" rows={partnerRows} empty="None recorded." {...group} />
-          <KinGroup title="Children" rows={childRows} empty="None recorded." {...group} />
-          <KinGroup
-            title="Brothers and sisters"
-            rows={siblingRows}
-            empty={parentIds.length ? "None recorded." : "Shown once parents are recorded."}
-            note="Worked out from shared parents, so there is nothing to add here. A half-sibling shares one birth or adoptive parent; a step-sibling is linked only through a step or foster parent."
-            {...group}
-          />
-        </div>
-        <p className="mt-6 text-sm text-ink">
-          Each link is recorded once and shows on both people&apos;s records: &ldquo;Parent of&rdquo; on one is &ldquo;Child of&rdquo; on the other.
-        </p>
+      <Card title="Marriages and partnerships">
+        {mine.length === 0 ? (
+          <Empty>None recorded.</Empty>
+        ) : (
+          <Rows>
+            {mine.map((l) => {
+              const other = l.person_a === personId ? l.person_b : l.person_a;
+              const verb = l.kind === "marriage" ? "Married to" : l.kind === "civil_partnership" ? "Civil partner of" : "Partner of";
+              const when = [
+                l.start_date ? `Since ${formatDate(l.start_date)}` : null,
+                l.end_date
+                  ? `Ended ${formatDate(l.end_date)}${l.end_reason ? ` (${label(PARTNERSHIP_END_REASONS, l.end_reason)?.toLowerCase()})` : ""}`
+                  : "Current",
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <Row
+                  key={l.id}
+                  title={
+                    <>
+                      {verb} {personLink(other)}
+                    </>
+                  }
+                  meta={`${label(PARTNERSHIP_KINDS, l.kind)} · ${when}`}
+                >
+                  {ctx.canManage && (
+                    <RemoveButton action={removePartnership.bind(null, familyId, personId, l.id)} what={`the partnership with ${name(other)}`} />
+                  )}
+                </Row>
+              );
+            })}
+          </Rows>
+        )}
+        {ctx.canEdit && <Fold label="Add a marriage or partnership">{form("partner_of")}</Fold>}
       </Card>
 
-      {ctx.canEdit && (
-        <Card title="Add a relationship">
-          <RelationshipForm
-            action={addLink.bind(null, familyId, personId)}
-            me={me}
-            people={people}
-            existing={{
-              parents: parentIds,
-              children: children.map((l) => l.child_id),
-              partners: mine.map((l) => (l.person_a === personId ? l.person_b : l.person_a)),
-            }}
-            currentPartners={currentPartners}
-          />
-        </Card>
-      )}
+      <Card title="Parents and children" description="Each link shows on both people's records.">
+        <div className="grid gap-8 md:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-[15px] font-semibold text-ink">Parents</h3>
+            {parents.length === 0 ? (
+              <Empty>None recorded.</Empty>
+            ) : (
+              <Rows>
+                {parents.map((l) => (
+                  <Row key={l.id} title={personLink(l.parent_id)} meta={[`${kindOf(l.kind)} parent`, life(l.parent_id)].filter(Boolean).join(" · ")}>
+                    {ctx.canManage && (
+                      <RemoveButton action={removeParentLink.bind(null, familyId, personId, l.id)} what={`the link to ${name(l.parent_id)}`} />
+                    )}
+                  </Row>
+                ))}
+              </Rows>
+            )}
+            {ctx.canEdit && <Fold label="Add a parent">{form("child_of")}</Fold>}
+          </div>
+          <div>
+            <h3 className="mb-2 text-[15px] font-semibold text-ink">Children</h3>
+            {children.length === 0 ? (
+              <Empty>None recorded.</Empty>
+            ) : (
+              <Rows>
+                {children.map((l) => (
+                  <Row key={l.id} title={personLink(l.child_id)} meta={[`${kindOf(l.kind)} child`, life(l.child_id)].filter(Boolean).join(" · ")}>
+                    {ctx.canManage && (
+                      <RemoveButton action={removeParentLink.bind(null, familyId, personId, l.id)} what={`the link to ${name(l.child_id)}`} />
+                    )}
+                  </Row>
+                ))}
+              </Rows>
+            )}
+            {ctx.canEdit && <Fold label="Add a child">{form("parent_of")}</Fold>}
+          </div>
+        </div>
+      </Card>
 
-      <LaterTab title="Roles in entities">
+      <Card
+        title="Brothers and sisters"
+        description="Worked out from shared parents, so there is nothing to add here. A half-sibling shares one birth or adoptive parent; a step-sibling is linked only through a step or foster parent."
+      >
+        {siblings.length === 0 ? (
+          <Empty>{parentIds.length ? "None recorded." : "Shown once parents are recorded."}</Empty>
+        ) : (
+          <Rows>
+            {siblings.map((s) => (
+              <Row key={s.id} title={personLink(s.id)} meta={[s.label, life(s.id)].filter(Boolean).join(" · ")} />
+            ))}
+          </Rows>
+        )}
+      </Card>
+
+      <LaterTab title="Roles in the family entities">
         Directorships, trusteeships and other roles will show here once the Organisation is built.
       </LaterTab>
     </>
@@ -501,66 +514,64 @@ export async function RelationshipsTab({ ctx, familyId, personId, person, everyo
 }
 
 // ---------------------------------------------------------------------------
+// Finances.
 
 export async function FinancesTab({ ctx, familyId, personId }: Props) {
-  const { data: tax } = await ctx.db!.from("tax_numbers").select("id, country, number").eq("person_id", personId);
-  const canSee = ctx.canEdit || (tax ?? []).length > 0;
+  const { data: taxNumbers } = await ctx.db!.from("tax_numbers").select("id, country, number").eq("person_id", personId).order("country");
+  const canSee = ctx.canEdit || (taxNumbers ?? []).length > 0;
+
   return (
     <>
       <PrivateNote ctx={ctx} />
       {canSee && (
         <Card title="Tax numbers">
-          {(tax ?? []).length === 0 ? (
-            <p className="text-ink">None recorded.</p>
+          {(taxNumbers ?? []).length === 0 ? (
+            <Empty>None recorded.</Empty>
           ) : (
-            <ul className="divide-y divide-border">
-              {(tax ?? []).map((t: { id: string; country: string; number: string }) => (
-                <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <span className="text-ink">
-                    {t.country} · {t.number}
-                  </span>
+            <Rows>
+              {(taxNumbers ?? []).map((t: { id: string; country: string; number: string }) => (
+                <Row key={t.id} title={t.number} meta={t.country}>
                   {ctx.canManage && <RemoveButton action={removeTaxNumber.bind(null, familyId, personId, t.id)} what={`tax number ${t.number}`} />}
-                </li>
+                </Row>
               ))}
-            </ul>
+            </Rows>
           )}
           {ctx.canEdit && (
-            <form action={addTaxNumber.bind(null, familyId, personId)} className="mt-4 grid gap-4 sm:grid-cols-3 sm:items-end">
-              <Field label="Country" name="country" required />
-              <Field label="Tax number" name="number" required />
-              <SubmitButton variant="secondary">Add tax number</SubmitButton>
-            </form>
+            <Fold label="Add a tax number">
+              <form action={addTaxNumber.bind(null, familyId, personId)} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <Field label="Country" name="country" required />
+                <Field label="Tax number" name="number" required />
+                <SubmitButton pendingText="Adding…">Add tax number</SubmitButton>
+              </form>
+            </Fold>
           )}
         </Card>
       )}
       <LaterTab title="Distributions received">
-        Distributions, showing whether each came from the income pool or the capital pool, will show here once
-        Dividends and Distributions are built.
+        Distributions, showing whether each came from the income pool or the capital pool, will show here once Dividends and
+        Distributions are built.
       </LaterTab>
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
+// History: what changed and when (Managers only).
 
 const TABLE_LABELS: Record<string, string> = {
-  people: "Overview",
+  people: "Details",
   person_details: "Personal details",
   passports: "Passport",
   tax_numbers: "Tax number",
-  phone_numbers: "Telephone number",
+  phone_numbers: "Phone number",
   person_addresses: "Address",
   parent_child: "Family link",
-  partnerships: "Partnership",
+  partnerships: "Marriage or partnership",
 };
 
 export async function HistoryTab({ ctx, personId }: Props) {
   if (!ctx.canManage) {
-    return (
-      <LaterTab title="History">
-        Only the family&apos;s Managers can see the change history.
-      </LaterTab>
-    );
+    return <LaterTab title="History">Only the family&apos;s Managers can see the change history.</LaterTab>;
   }
   // Changes to this person's own record, and to rows that belong to them.
   const { data: rows } = await ctx.db!
@@ -583,18 +594,19 @@ export async function HistoryTab({ ctx, personId }: Props) {
 
   const verbs: Record<string, string> = { insert: "added", update: "changed", delete: "removed" };
   return (
-    <Card title="History">
+    <Card title="History" description="Every change is recorded and can't be altered.">
       {(rows ?? []).length === 0 ? (
-        <p className="text-ink">No changes recorded yet.</p>
+        <Empty>No changes recorded yet.</Empty>
       ) : (
-        <ul className="divide-y divide-border">
+        <Rows>
           {(rows ?? []).map((r: { id: number; action: string; table_name: string; created_at: string }) => (
-            <li key={r.id} className="py-3 text-ink">
-              {new Date(r.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" })} ·{" "}
-              {TABLE_LABELS[r.table_name] ?? r.table_name} {verbs[r.action] ?? r.action}
-            </li>
+            <Row
+              key={r.id}
+              title={`${TABLE_LABELS[r.table_name] ?? r.table_name} ${verbs[r.action] ?? r.action}`}
+              meta={new Date(r.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" })}
+            />
           ))}
-        </ul>
+        </Rows>
       )}
     </Card>
   );

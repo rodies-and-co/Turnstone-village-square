@@ -1,111 +1,104 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { SiteHeader } from "@/components/SiteHeader";
-import { requireSignedIn } from "@/lib/auth";
-import { openFamilyDatabase } from "@/lib/family-db";
-import { roleInFamily } from "@/lib/roles";
+import { AppShell, PageTitle } from "@/components/AppShell";
+import { Card } from "@/components/ui";
+import { getFamilyContext } from "@/lib/family-context";
 
 export const dynamic = "force-dynamic";
 
-// The sections of the plan. Each becomes a working page in later stages.
-// Items listed in READY already have a working page.
-const READY: Record<string, string> = { "The Tree": "tree" };
-const SECTIONS = [
-  { title: "Recording the facts", items: ["The Tree", "The Branches", "The Organisation", "The Story", "The Vault"] },
-  { title: "Things to do", items: ["Meetings, resolutions and notes", "Projects", "Dividends and distributions", "Share transactions", "Risk management"] },
-  { title: "Organising", items: ["To-do list", "Calendar", "Compliance calendar"] },
-  { title: "Reports", items: ["Statutory registers", "Structure charts", "Family and branch timeline", "Risk heat map"] },
-  { title: "Village Square", items: ["Help bot", "Ask the Elder", "Circles of advisors"] },
-  { title: "Investments", items: ["Portfolios, properties and rentals (built last)"] },
+// What is still to come, from the plan. Each becomes a tab when it is built.
+const LATER = [
+  ["Recording the facts", "The Branches, The Organisation, The Story, The Vault"],
+  ["Things to do", "Meetings and resolutions, Projects, Dividends and distributions, Share transactions, Risk management"],
+  ["Organising", "To-do list, Calendar, Compliance calendar"],
+  ["Reports", "Statutory registers, Structure charts, Family and branch timeline, Risk heat map"],
+  ["Village Square", "Help bot, Ask the Elder, Circles of advisors"],
+  ["Investments", "Portfolios, properties and rentals (built last)"],
 ];
 
 export default async function FamilyPage({ params }: { params: Promise<{ familyId: string }> }) {
   const { familyId } = await params;
-  const { supabase, systemRole, displayName, hasTwoFactor, familyRoles } = await requireSignedIn();
+  const ctx = await getFamilyContext(familyId);
+  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
 
-  const { data: family } = await supabase
-    .from("families")
-    .select("id, name, database_url, database_publishable_key")
-    .eq("id", familyId)
-    .maybeSingle();
-  if (!family) notFound();
-
-  const role = roleInFamily(systemRole, familyRoles.get(family.id) ?? null);
-
-  // Open the family's own database as this user.
-  const familyDb = await openFamilyDatabase(family);
-  let status: { connected: boolean; people?: number; branches?: number; nameMatches?: boolean } = {
-    connected: false,
-  };
-  if (familyDb) {
-    const { data: settings } = await familyDb.from("family_settings").select("family_id").maybeSingle();
-    const { count: people } = await familyDb.from("people").select("id", { count: "exact", head: true });
-    const { count: branches } = await familyDb.from("branches").select("id", { count: "exact", head: true });
-    status = {
-      connected: Boolean(settings),
-      nameMatches: settings?.family_id === family.id,
-      people: people ?? 0,
-      branches: branches ?? 0,
-    };
+  let status: "not_set_up" | "not_recognised" | "wrong_family" | "ok" = "not_set_up";
+  let people = 0;
+  let branches: { id: string; name: string; head: string | null; members: number }[] = [];
+  if (ctx.db) {
+    const [{ data: settings }, { data: ppl }, { data: br }] = await Promise.all([
+      ctx.db.from("family_settings").select("family_id").maybeSingle(),
+      ctx.db.from("people").select("id, branch_id, known_as, full_names, surname"),
+      ctx.db.from("branches").select("id, name, head_person_id").order("name"),
+    ]);
+    status = !settings ? "not_recognised" : settings.family_id !== ctx.family.id ? "wrong_family" : "ok";
+    const list = (ppl ?? []) as { id: string; branch_id: string | null; known_as: string | null; full_names: string; surname: string }[];
+    people = list.length;
+    branches = ((br ?? []) as { id: string; name: string; head_person_id: string | null }[]).map((b) => {
+      const head = list.find((p) => p.id === b.head_person_id);
+      return {
+        id: b.id,
+        name: b.name,
+        head: head ? `${head.known_as || head.full_names.split(" ")[0]} ${head.surname}` : null,
+        members: list.filter((p) => p.branch_id === b.id).length,
+      };
+    });
   }
 
   return (
-    <>
-      <SiteHeader name={displayName} roleLabel={role} hasTwoFactor={hasTwoFactor} />
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <p>
-          <Link href="/" className="inline-flex min-h-11 items-center underline">
-            All families
-          </Link>
+    <AppShell
+      family={{ id: familyId, name: ctx.family.name }}
+      section="family-overview"
+      crumbs={[["My families", "/"], [familyName]]}
+      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
+    >
+      <PageTitle eyebrow="Family overview" title={familyName} subtitle={ctx.roleLabel ? `You are ${/^[aeiou]/i.test(ctx.roleLabel) ? "an" : "a"} ${ctx.roleLabel} in this family.` : undefined} />
+      {status !== "ok" ? (
+        <p role="alert" className="alert">
+          {status === "not_set_up"
+            ? "This family's database isn't connected yet. The Super User adds it in the hub."
+            : status === "wrong_family"
+              ? "This family database belongs to a different family. Ask the Turnstone team to check the setup before using it."
+              : "The family database did not recognise you. If you were just given access, sign out and in again. If it keeps happening, ask the Turnstone team to check the setup."}
         </p>
-        <h1 className="mt-2 text-2xl font-semibold text-ink">{family.name}</h1>
-
-        <div className="mt-6 rounded-2xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-ink">Family database</h2>
-          {!family.database_url ? (
-            <p className="mt-2 text-ink">Not connected yet. The Super User adds it in the hub.</p>
-          ) : !status.connected ? (
-            <p role="alert" className="alert mt-3">
-              The family database did not recognise you. If you were just given access, sign out and in
-              again. If it keeps happening, ask the Turnstone team to check the setup.
+      ) : (
+        <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
+          <Card
+            title="The Tree"
+            actions={
+              <Link href={`/families/${familyId}/tree`} className="btn-primary">
+                Open the Tree
+              </Link>
+            }
+          >
+            <p className="text-ink-2">
+              {people} {people === 1 ? "person" : "people"} you can see, in {branches.length}{" "}
+              {branches.length === 1 ? "branch" : "branches"}.
             </p>
-          ) : status.nameMatches === false ? (
-            <p role="alert" className="alert mt-3">
-              This family database belongs to a different family. Ask the Turnstone team to check the
-              setup before using it.
-            </p>
-          ) : (
-            <p className="mt-2 text-ink">
-              Connected. You can see {status.people} {status.people === 1 ? "person" : "people"} in{" "}
-              {status.branches} {status.branches === 1 ? "branch" : "branches"}.
-            </p>
-          )}
-        </div>
-
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          {SECTIONS.map((s) => (
-            <section key={s.title} className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold text-ink">{s.title}</h2>
-              <ul className="mt-2 list-disc pl-5 text-ink">
-                {s.items.map((i) => (
-                  <li key={i}>
-                    {READY[i] && status.connected ? (
-                      <Link href={`/families/${family.id}/${READY[i]}`} className="inline-flex min-h-11 items-center font-semibold underline">
-                        {i}
-                      </Link>
-                    ) : (
-                      i
-                    )}
+            {branches.length > 0 && (
+              <ul className="mt-4 divide-y divide-border border-y border-border">
+                {branches.map((b) => (
+                  <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <span className="font-medium text-ink">{b.name}</span>
+                    <span className="text-sm text-ink-3">
+                      {b.head ? `Headed by ${b.head} · ` : ""}
+                      {b.members} {b.members === 1 ? "person" : "people"}
+                    </span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-sm text-ink">
-                {s.items.some((i) => READY[i]) ? "Underlined items are ready. The rest come in later stages." : "Coming in a later stage."}
-              </p>
-            </section>
-          ))}
+            )}
+          </Card>
+          <Card title="Coming in later stages">
+            <dl className="space-y-3">
+              {LATER.map(([h, d]) => (
+                <div key={h}>
+                  <dt className="font-semibold text-ink">{h}</dt>
+                  <dd className="text-sm text-ink-3">{d}</dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
         </div>
-      </main>
-    </>
+      )}
+    </AppShell>
   );
 }

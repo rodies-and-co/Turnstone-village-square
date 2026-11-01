@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.5",
+    "@fontsource/ibm-plex-sans": "^5.2.5",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.3",
     "next": "15.5.27",

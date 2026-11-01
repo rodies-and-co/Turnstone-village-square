@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SiteHeader } from "@/components/SiteHeader";
+import { AppShell, PageTitle } from "@/components/AppShell";
 import { Toast } from "@/components/feedback";
-import { BackLink, PageShell } from "@/components/ui";
+import { Chip, UnderlineTabs } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
 import { errorMessage, savedMessage } from "@/lib/messages";
-import { displayNames, type PersonSummary } from "@/lib/people";
+import { THREE_CIRCLE_ROLES, displayNames, lifeLine, type PersonSummary } from "@/lib/people";
 import { AddressesTab, FinancesTab, HistoryTab, IdentityTab, LaterTab, OverviewTab, RelationshipsTab } from "./tabs";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +14,11 @@ const TABS = [
   ["overview", "Overview"],
   ["identity", "Identity"],
   ["addresses", "Addresses"],
-  ["relationships", "Relationships & roles"],
+  ["relationships", "Family & roles"],
   ["finances", "Finances"],
-  ["records", "Records & reports"],
+  ["records", "Records"],
   ["todo", "To do"],
-  ["risks", "Risk notes"],
+  ["risks", "Risks"],
   ["history", "History"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
@@ -47,68 +47,77 @@ export default async function PersonPage({
 
   const shared = { ctx, familyId, personId, person, everyone: everyone ?? [], names };
 
+  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
+  const { data: branch } = person.branch_id
+    ? await ctx.db.from("branches").select("name").eq("id", person.branch_id).maybeSingle()
+    : { data: null };
+  const summary = [
+    lifeLine(person),
+    branch?.name,
+    person.three_circle_role ? THREE_CIRCLE_ROLES[person.three_circle_role as keyof typeof THREE_CIRCLE_ROLES] : null,
+    person.member_type === "non_family" ? "Non-family" : person.member_type === "family_not_succession" ? "Family, not in succession" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <>
-      <SiteHeader name={ctx.displayName} roleLabel={ctx.roleLabel} hasTwoFactor={ctx.hasTwoFactor} />
-      <PageShell>
-        <BackLink href={`/families/${familyId}/tree`}>The Tree</BackLink>
-        <h1 className="mt-2 text-2xl font-semibold text-ink">
-          {names.get(personId)}
-          {person.deceased ? " · Deceased" : ""}
-        </h1>
-        <p className="text-ink">
-          {person.full_names} {person.surname}
-          {person.maiden_name ? ` (born ${person.maiden_name})` : ""}
-        </p>
+    <AppShell
+      family={{ id: familyId, name: ctx.family.name }}
+      section="tree"
+      crumbs={[["My families", "/"], [familyName, `/families/${familyId}`], ["The Tree", `/families/${familyId}/tree`], [names.get(personId) ?? "Person"]]}
+      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
+    >
+      <PageTitle
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {names.get(personId)}
+            {person.deceased && <Chip>Deceased</Chip>}
+          </span>
+        }
+        subtitle={
+          <>
+            {person.full_names} {person.surname}
+            {person.maiden_name ? ` (born ${person.maiden_name})` : ""}
+            <span className="block text-sm text-ink-3">{summary}</span>
+          </>
+        }
+        actions={
+          <Link href={`/families/${familyId}/tree`} className="btn-quiet">
+            Back to the Tree
+          </Link>
+        }
+      />
 
-        <nav aria-label="Record sections" className="mt-6 flex flex-wrap gap-2 border-b border-border pb-3">
-          {TABS.map(([t, label]) => (
-            <Link
-              key={t}
-              href={`/families/${familyId}/tree/${personId}?tab=${t}`}
-              aria-current={t === tab ? "page" : undefined}
-              className={
-                t === tab
-                  ? "inline-flex min-h-11 items-center rounded-lg bg-primary px-3 font-semibold text-ink"
-                  : "inline-flex min-h-11 items-center rounded-lg px-3 text-ink hover:bg-muted"
-              }
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
+      <UnderlineTabs
+        label="Record sections"
+        current={tab}
+        items={TABS.map(([t, text]) => [t, text, `/families/${familyId}/tree/${personId}?tab=${t}`] as [string, string, string])}
+      />
 
-        <div className="mt-6 space-y-6">
-          {/* The error shows on the page and as a message at the bottom of the
-              screen (wherever the person has scrolled to); only the message is
-              read out, so screen readers don't hear it twice. */}
-          {sp.error && <p className="alert">Not saved: {errorMessage(sp.error)}</p>}
-          {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
-          {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
+      <div className="mt-6 space-y-5">
+        {/* The error shows on the page and as a message at the bottom of the
+            screen (wherever the person has scrolled to); only the message is
+            read out, so screen readers don't hear it twice. */}
+        {sp.error && <p className="alert">Not saved: {errorMessage(sp.error)}</p>}
+        {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
+        {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
 
-          {tab === "overview" && <OverviewTab {...shared} />}
-          {tab === "identity" && <IdentityTab {...shared} />}
-          {tab === "addresses" && <AddressesTab {...shared} />}
-          {tab === "relationships" && <RelationshipsTab {...shared} />}
-          {tab === "finances" && <FinancesTab {...shared} />}
-          {tab === "records" && (
-            <LaterTab title="Records & reports">
-              Reports on this person&apos;s ownership, roles and interests come with the Organisation stage.
-            </LaterTab>
-          )}
-          {tab === "todo" && (
-            <LaterTab title="To do">
-              This will show this person&apos;s items from the family&apos;s one to-do list, once Organising is built.
-            </LaterTab>
-          )}
-          {tab === "risks" && (
-            <LaterTab title="Risk notes">
-              This will show risks linked to this person, from the family&apos;s one risk register.
-            </LaterTab>
-          )}
-          {tab === "history" && <HistoryTab {...shared} />}
-        </div>
-      </PageShell>
-    </>
+        {tab === "overview" && <OverviewTab {...shared} />}
+        {tab === "identity" && <IdentityTab {...shared} />}
+        {tab === "addresses" && <AddressesTab {...shared} />}
+        {tab === "relationships" && <RelationshipsTab {...shared} />}
+        {tab === "finances" && <FinancesTab {...shared} />}
+        {tab === "records" && (
+          <LaterTab title="Records and reports">
+            Reports on this person&apos;s ownership, roles and interests come with the Organisation stage.
+          </LaterTab>
+        )}
+        {tab === "todo" && (
+          <LaterTab title="To do">This will show this person&apos;s items from the family&apos;s one to-do list, once Organising is built.</LaterTab>
+        )}
+        {tab === "risks" && <LaterTab title="Risk notes">This will show risks linked to this person, from the family&apos;s one risk register.</LaterTab>}
+        {tab === "history" && <HistoryTab {...shared} />}
+      </div>
+    </AppShell>
   );
 }

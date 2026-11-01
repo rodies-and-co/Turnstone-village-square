@@ -10,6 +10,8 @@ import {
   parsePersonForm,
   parsePhone,
   siblingKinds,
+  generations,
+  partnershipLine,
 } from "@/lib/people";
 
 const form = (fields: Record<string, string>) => {
@@ -147,5 +149,35 @@ describe("brothers and sisters", () => {
     ]);
     const label = Object.fromEntries(result.map((r) => [r.id, r.label]));
     expect(label).toEqual({ full: "Sibling", half: "Half-sibling", step: "Step-sibling", "half-step-dad": "Half-sibling" });
+  });
+});
+
+describe("generations", () => {
+  it("places founders, children, grandchildren and those who married in", () => {
+    const ids = ["hans", "lies", "pieter", "sanne", "daan", "loner", "willem"];
+    const links = [
+      { parent_id: "hans", child_id: "pieter" },
+      { parent_id: "lies", child_id: "pieter" },
+      { parent_id: "pieter", child_id: "daan" },
+      { parent_id: "sanne", child_id: "daan" },
+    ];
+    const partners = [
+      { person_a: "hans", person_b: "lies" },
+      { person_a: "pieter", person_b: "sanne" },
+    ];
+    const g = generations(ids, links, partners);
+    expect(Object.fromEntries(g)).toEqual({ hans: 1, lies: 1, pieter: 2, sanne: 2, daan: 3, loner: null, willem: null });
+  });
+});
+
+describe("partnership line", () => {
+  const name = (id: string) => ({ a: "Hans", b: "Lies", c: "Tom" })[id] ?? "?";
+  it("describes current and ended partnerships in plain English", () => {
+    const base = { start_date: null, end_date: null, end_reason: null };
+    expect(partnershipLine("a", [{ ...base, person_a: "a", person_b: "b", kind: "marriage" }], name)).toBe("Married to Lies");
+    expect(
+      partnershipLine("b", [{ person_a: "b", person_b: "c", kind: "marriage", start_date: null, end_date: "2016-05-01", end_reason: "divorce" }], name),
+    ).toBe("Divorced from Tom (2016)");
+    expect(partnershipLine("c", [], name)).toBeNull();
   });
 });
