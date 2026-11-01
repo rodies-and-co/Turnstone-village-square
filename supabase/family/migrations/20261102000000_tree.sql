@@ -67,6 +67,28 @@ $$;
 create trigger person_details_birth_year after insert or update of date_of_birth on public.person_details
   for each row execute function private.sync_birth_year();
 
+-- And the other way: once a date of birth is recorded, the year on the
+-- person's record always follows it, whatever is typed in the Overview.
+create function private.birth_year_from_details()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  dob date;
+begin
+  select d.date_of_birth into dob from public.person_details d where d.person_id = new.id;
+  if dob is not null then
+    new.birth_year := extract(year from dob)::integer;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger people_birth_year_follows_details before update of birth_year on public.people
+  for each row execute function private.birth_year_from_details();
+
 create table public.passports (
   id uuid primary key default gen_random_uuid(),
   person_id uuid not null references public.people (id) on delete cascade,
@@ -151,6 +173,9 @@ create table public.partnerships (
   check (end_date is null or start_date is null or end_date >= start_date),
   check ((end_reason is null) or (end_date is not null))
 );
+-- Each partnership is stored once (the pair is put in a fixed order first).
+-- The same couple may still have a second marriage with another start date.
+create unique index partnerships_once on public.partnerships (person_a, person_b, kind, coalesce(start_date, 'infinity'::date));
 create index partnerships_a_idx on public.partnerships (person_a);
 create index partnerships_b_idx on public.partnerships (person_b);
 
@@ -174,7 +199,7 @@ as $$
 $$;
 
 -- May the signed-in user see this person's personal details? Editors, and the
--- person themself.
+-- person themself (if their access grants let them see their own record).
 create function private.can_see_private(p_person uuid)
 returns boolean
 language sql
@@ -185,7 +210,11 @@ as $$
   select private.can_edit()
     or (
       private.my_role() = 'viewer'
-      and exists (select 1 from public.people p where p.id = p_person and p.user_id = auth.uid())
+      and exists (
+        select 1 from public.people p
+        where p.id = p_person and p.user_id = auth.uid()
+          and private.can_see_person(p.branch_id, p.user_id)
+      )
     );
 $$;
 
@@ -205,12 +234,13 @@ as $$
         select 1 from public.person_addresses pa
         join public.people p on p.id = pa.person_id
         where pa.address_id = p_address and p.user_id = auth.uid()
+          and private.can_see_person(p.branch_id, p.user_id)
       )
     );
 $$;
 
 revoke all on function private.can_see_person_id(uuid), private.can_see_private(uuid),
-  private.can_see_address(uuid), private.sync_birth_year() from public;
+  private.can_see_address(uuid), private.sync_birth_year(), private.birth_year_from_details() from public;
 grant execute on function private.can_see_person_id(uuid), private.can_see_private(uuid),
   private.can_see_address(uuid) to authenticated;
 

@@ -83,6 +83,9 @@ own new project.
    - **Be careful:** these values can never be changed afterwards.
 5. **SQL Editor**: run `supabase/setup/6-family-practice-data.sql`. It adds
    fictional people.
+6. **SQL Editor**: run every later file in `supabase/family/migrations`, oldest
+   first (for example `20261102000000_tree.sql` for The Tree). Each family
+   project needs every one of these files, run once.
 6. Note this project's **Project URL** (Project Settings → Data API) and its
    **Publishable key** (Project Settings → API Keys, starts `sb_publishable_`).
 

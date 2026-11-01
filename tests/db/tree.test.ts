@@ -71,6 +71,17 @@ describe("the Tree: who sees personal details", () => {
     });
   });
 
+  it("a Viewer's own details follow their access grants", async () => {
+    const s = await signedIn(USERS.hartleyViewerOwnRecord, "aal1");
+    await as(hartley, s, async (db) => {
+      // Take away their own-record grant (as the database owner), then look again as them.
+      await db.query("reset role");
+      await db.query("delete from access_grants where user_id = $1", [USERS.hartleyViewerOwnRecord]);
+      await db.query("set local role authenticated");
+      for (const t of PERSONAL) expect(await count(db, `select * from ${t}`), t).toBe(0);
+    });
+  });
+
   it("a branch Viewer sees people in their branch but not their personal details", async () => {
     const v = await as(hartley, await signedIn(USERS.hartleyViewerBranch, "aal1"), visible);
     expect(v.people).toBe(1);
@@ -174,6 +185,25 @@ describe("the Tree: keeping the records sound", () => {
       await db.query("update person_details set date_of_birth = '1949-01-01' where person_id = $1", [HARTLEY_DB.northPerson]);
       const { rows } = await db.query("select birth_year from people where id = $1", [HARTLEY_DB.northPerson]);
       expect(rows[0].birth_year).toBe(1949);
+    });
+  });
+
+  it("the birth year cannot be changed away from a recorded date of birth", async () => {
+    await asOwner(hartley, async (db) => {
+      await db.query("update people set birth_year = 1990 where id = $1", [HARTLEY_DB.northPerson]);
+      const { rows } = await db.query("select birth_year from people where id = $1", [HARTLEY_DB.northPerson]);
+      expect(rows[0].birth_year).toBe(1948);
+    });
+  });
+
+  it("the same partnership cannot be stored twice, whichever order it is entered", async () => {
+    await asOwner(hartley, async (db) => {
+      await expect(
+        db.query(
+          "insert into partnerships (person_a, person_b, kind, start_date) values ($1, $2, 'marriage', '1972-06-01')",
+          [HARTLEY_DB.southPerson, HARTLEY_DB.northPerson],
+        ),
+      ).rejects.toThrow(/duplicate key/);
     });
   });
 

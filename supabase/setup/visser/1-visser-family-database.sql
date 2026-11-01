@@ -1,7 +1,8 @@
 -- VISSER family project: everything in one go.
 -- Run ONCE in the Village-Square-Visser project's SQL Editor (paste the whole
 -- file, then Run). It:
---   1. creates the family database (same as supabase/family/migrations),
+--   1. creates the family database (the foundation only: afterwards, also run
+--      each later file in supabase/family/migrations, starting with the Tree),
 --   2. ties it to the Visser family in the hub and to the hub's sign-in,
 --   3. adds fictional practice people and branches.
 -- The Visser family is fictional. Never use this file for a real family.

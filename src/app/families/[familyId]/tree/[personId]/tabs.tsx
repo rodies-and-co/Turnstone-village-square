@@ -525,12 +525,13 @@ export async function HistoryTab({ ctx, personId }: Props) {
     .or(
       [
         `record_id.eq.${personId}`,
-        `detail->>person_id.eq.${personId}`,
-        `detail->after->>person_id.eq.${personId}`,
-        `detail->>child_id.eq.${personId}`,
-        `detail->>parent_id.eq.${personId}`,
-        `detail->>person_a.eq.${personId}`,
-        `detail->>person_b.eq.${personId}`,
+        // New and removed rows store the row itself; changed rows store
+        // "before" and "after". Look in all three places.
+        ...["person_id", "child_id", "parent_id", "person_a", "person_b"].flatMap((col) => [
+          `detail->>${col}.eq.${personId}`,
+          `detail->before->>${col}.eq.${personId}`,
+          `detail->after->>${col}.eq.${personId}`,
+        ]),
       ].join(","),
     )
     .order("created_at", { ascending: false })
