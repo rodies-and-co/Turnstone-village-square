@@ -75,3 +75,14 @@ insert into public.advisor_roles (advisor_id, branch_id, advises_on) values
 insert into public.family_statements (id, kind, branch_id, title, body) values
   ('a7000000-0000-4000-8000-000000000001', 'purpose', null, 'Our purpose', 'Test purpose text.'),
   ('a7000000-0000-4000-8000-000000000002', 'values', 'a1000000-0000-4000-8000-000000000001', 'North values', 'Test values text.');
+
+-- The Organisation: a family company, a North branch trust, and a trust company.
+insert into public.outside_organisations (id, name, kind) values
+  ('a8000000-0000-4000-8000-000000000001', 'Test Trust Company Ltd', 'trust_company');
+insert into public.entities (id, name, entity_type, jurisdiction, sub_type, branch_id, base_currency, year_end_month, year_end_day) values
+  ('a9000000-0000-4000-8000-000000000001', 'Test Holdings Ltd', 'company', 'United Kingdom', 'Private company limited by shares', null, 'GBP', 3, 31),
+  ('a9000000-0000-4000-8000-000000000002', 'North Family Trust', 'trust', 'South Africa', 'Inter vivos trust', 'a1000000-0000-4000-8000-000000000001', 'ZAR', 2, 28);
+insert into public.appointments (entity_id, role, person_id, organisation_id) values
+  ('a9000000-0000-4000-8000-000000000001', 'director', 'a2000000-0000-4000-8000-000000000001', null),
+  ('a9000000-0000-4000-8000-000000000001', 'director', 'a2000000-0000-4000-8000-000000000002', null),
+  ('a9000000-0000-4000-8000-000000000002', 'trustee', null, 'a8000000-0000-4000-8000-000000000001');

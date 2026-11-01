@@ -39,6 +39,18 @@ export const SAVED_MESSAGES = {
   statement_adopted: "Statement adopted.",
   statement_withdrawn: "Adoption withdrawn. The statement is a draft again.",
   statement_removed: "Statement removed.",
+  entity_added: "Entity added. Its setup checklist is below.",
+  entity_added_new_standard: "Entity added. There was no Entity Standard for this kind of entity, so a draft was created for the Super User or System Admin to review.",
+  entity_saved: "Entity details saved.",
+  entity_removed: "Entity removed.",
+  office_saved: "Registered office saved.",
+  appointment_added: "Appointment recorded.",
+  appointment_ended: "Appointment ended. It stays in the history.",
+  appointment_removed: "Appointment removed from the history.",
+  standard_saved: "Entity Standard saved.",
+  standard_new_version: "Saved as a new draft version. Approving it brings it into force and retires the earlier version, which stays on record.",
+  standard_approved: "Entity Standard approved. Entities that use it now follow approved rules.",
+  standard_retired: "Entity Standard retired. It stays on record for the entities that used it.",
 } as const;
 
 export type SavedCode = keyof typeof SAVED_MESSAGES;

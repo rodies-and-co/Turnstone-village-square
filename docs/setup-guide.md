@@ -87,7 +87,12 @@ own new project.
    first (for example `20261102000000_tree.sql` for The Tree). Each family
    project needs every one of these files, run once.
 7. Practice families only: run `supabase/setup/7-practice-tree-update.sql` to
-   name the branches after their heads and add the family links.
+   name the branches after their heads and add the family links, and
+   `supabase/setup/8-practice-organisation.sql` to add practice entities.
+
+The hub also gets later files: run every file in `supabase/hub/migrations`
+after the foundation, oldest first, once, in the hub project (for example the
+Entity Standards).
 6. Note this project's **Project URL** (Project Settings → Data API) and its
    **Publishable key** (Project Settings → API Keys, starts `sb_publishable_`).
 

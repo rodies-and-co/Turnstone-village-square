@@ -10,7 +10,7 @@ import { MobileMenu } from "@/components/MobileMenu";
 
 export type Crumb = [text: string, href?: string];
 
-type Section = "family-overview" | "tree" | "branches" | null;
+type Section = "family-overview" | "tree" | "branches" | "organisation" | "standards" | null;
 
 // The plan's areas. Only built ones are links; the rest say "later".
 const LATER_GROUPS: [string, string[]][] = [
@@ -90,7 +90,11 @@ export function AppShell({
                   The Branches
                 </NavLink>
               </li>
-              <Later>The Organisation</Later>
+              <li>
+                <NavLink href={`/families/${family.id}/organisation`} active={section === "organisation"}>
+                  The Organisation
+                </NavLink>
+              </li>
               <Later>The Story</Later>
               <Later>The Vault</Later>
             </ul>
@@ -117,8 +121,11 @@ export function AppShell({
       )}
 
       <div className="mt-auto space-y-1 border-t border-border pt-4">
-        <NavLink href="/" active={!family}>
+        <NavLink href="/" active={!family && section === null}>
           My families
+        </NavLink>
+        <NavLink href="/standards" active={section === "standards"}>
+          Entity Standards
         </NavLink>
         {!user.hasTwoFactor && <NavLink href="/mfa" active={false}>Set up two-factor</NavLink>}
         {user.name && (
