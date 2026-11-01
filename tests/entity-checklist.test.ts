@@ -20,6 +20,7 @@ const none: Standard = {
   min_designated_members: 0,
   identity_verification_required: false,
   share_capital: "none",
+  authorised_capital: "none",
 };
 const company = { entity_type: "company" as const, registration_number: "12345", registered_address_id: "a1", base_currency: "GBP", year_end_month: 3 };
 const director = (resident = false, identity_verified = false) => ({ role: "director", resident, identity_verified, licensed: false });

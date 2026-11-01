@@ -50,6 +50,7 @@ export const REQUIREMENT_FIELDS = [
   "min_designated_members",
   "identity_verification_required",
   "share_capital",
+  "authorised_capital",
   "bo_threshold_percent",
   "bo_rule",
   "bo_change_deadline",

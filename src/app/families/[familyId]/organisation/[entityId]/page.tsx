@@ -67,6 +67,7 @@ type Appointment = {
   role: AppointmentRole;
   person_id: string | null;
   organisation_id: string | null;
+  holder_entity_id: string | null;
   resident: boolean;
   identity_verified: boolean;
   licensed: boolean;
@@ -100,14 +101,18 @@ export default async function EntityPage({
       .from("entity_standards")
       .select("*")
       .then(({ data }) => ({ data: matchStandard((data ?? []) as EntityStandard[], entity) })),
-    db.from("appointments").select("id, role, person_id, organisation_id, resident, identity_verified, licensed, appointed_on, ceased_on").eq("entity_id", entityId),
+    db.from("appointments").select("id, role, person_id, organisation_id, holder_entity_id, resident, identity_verified, licensed, appointed_on, ceased_on").eq("entity_id", entityId),
     db.from("people").select("id, full_names, surname, known_as, birth_year, member_type").order("surname"),
-    db.from("outside_organisations").select("id, name, kind").order("name"),
+    db.from("outside_organisations").select("id, name, kind, licensed").order("name"),
     db.from("branches").select("id, name").order("name"),
     ctx.canEdit ? db.from("addresses").select("id, line1, line2, city, region, postal_code, country").order("city") : Promise.resolve({ data: [] }),
   ]);
   const standard = (standardRow ?? null) as EntityStandard | null;
-  const appts = (apptRows ?? []) as Appointment[];
+  const { data: entityRows } = await db.from("entities").select("id, name").order("name");
+  const entityNames = new Map(((entityRows ?? []) as { id: string; name: string }[]).map((e) => [e.id, e.name]));
+  const licensedOrgs = new Set(((orgRows ?? []) as { id: string; licensed: boolean }[]).filter((o) => o.licensed).map((o) => o.id));
+  // Whether a holder is licensed is recorded once, on the service provider.
+  const appts = ((apptRows ?? []) as Appointment[]).map((a) => ({ ...a, licensed: Boolean(a.organisation_id && licensedOrgs.has(a.organisation_id)) }));
   const current = appts.filter((a) => !a.ceased_on);
   const past = appts.filter((a) => a.ceased_on);
   const names = displayNames((peopleRows ?? []) as PersonSummary[]);
@@ -125,10 +130,25 @@ export default async function EntityPage({
       ) : (
         "Someone you can't see"
       )
+    ) : a.holder_entity_id ? (
+      entityNames.has(a.holder_entity_id) ? (
+        <Link href={`/families/${familyId}/organisation/${a.holder_entity_id}`} className="hover:underline">
+          {entityNames.get(a.holder_entity_id)}
+        </Link>
+      ) : (
+        "An entity you can't see"
+      )
     ) : (
-      orgs.get(a.organisation_id ?? "") ?? "An organisation"
+      <Link href={`/families/${familyId}/organisation/providers#p-${a.organisation_id}`} className="hover:underline">
+        {orgs.get(a.organisation_id ?? "") ?? "A service provider"}
+      </Link>
     );
-  const holderText = (a: Appointment) => (a.person_id ? (names.get(a.person_id) ?? "this person") : (orgs.get(a.organisation_id ?? "") ?? "this organisation"));
+  const holderText = (a: Appointment) =>
+    a.person_id
+      ? (names.get(a.person_id) ?? "this person")
+      : a.holder_entity_id
+        ? (entityNames.get(a.holder_entity_id) ?? "this entity")
+        : (orgs.get(a.organisation_id ?? "") ?? "this provider");
 
   const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
   const checklist = setupChecklist(entity, current, standard);
@@ -343,6 +363,7 @@ export default async function EntityPage({
                     roles={ROLES_FOR[entity.entity_type]}
                     people={((peopleRows ?? []) as { id: string }[]).map((p) => [p.id, names.get(p.id) ?? ""] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]))}
                     organisations={[...orgs.entries()]}
+                    entities={[...entityNames.entries()].filter(([id]) => id !== entityId)}
                     jurisdiction={entity.jurisdiction}
                   />
                 </Fold>

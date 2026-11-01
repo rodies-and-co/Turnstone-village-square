@@ -61,6 +61,7 @@ export type Standard = {
   min_designated_members: number;
   identity_verification_required: boolean;
   share_capital: "required" | "optional" | "none";
+  authorised_capital: "required" | "optional" | "none";
 };
 
 export type ChecklistEntity = {

@@ -1,6 +1,6 @@
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB, USERS, as, connect, count, hubClaims, type Session, removeWithApproval } from "./db";
+import { DB, USERS, as, connect, count, hubClaims, type Session, removeWithApproval, HARTLEY_DB, switchUser } from "./db";
 
 let hub: Client;
 let hartley: Client;
@@ -131,6 +131,45 @@ describe("the Organisation: keeping records sound", () => {
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
       await db.query("update entities set activity = 'Investments' where id = $1", [HOLDINGS]);
       expect(await count(db, "select * from audit_log where table_name = 'entities' and action = 'update'")).toBe(1);
+    });
+  });
+});
+
+describe("the Organisation: service providers and family entities as officers", () => {
+  it("a role can be held by one of the family's entities, but not by the entity itself, and by one holder only", async () => {
+    await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
+      await db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $2)", [HOLDINGS, NORTH_TRUST]);
+      await db.query("savepoint a");
+      await expect(db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $1)", [HOLDINGS])).rejects.toThrow(
+        /appointments_not_itself/,
+      );
+      await db.query("rollback to savepoint a");
+      await db.query("savepoint b");
+      await expect(
+        db.query("insert into appointments (entity_id, role, organisation_id, holder_entity_id) values ($1, 'secretary', $2, $3)", [HOLDINGS, ORG, NORTH_TRUST]),
+      ).rejects.toThrow(/appointments_one_holder/);
+      await db.query("rollback to savepoint b");
+      // The same family entity holds a role once at a time.
+      await expect(db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $2)", [HOLDINGS, NORTH_TRUST])).rejects.toThrow(
+        /duplicate key/,
+      );
+    });
+  });
+
+  it("a Viewer doesn't see an appointment held by an entity hidden from them", async () => {
+    await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
+      // A South-branch trust is a trustee of the North trust.
+      const other = (await db.query("insert into entities (name, entity_type, jurisdiction, sub_type, branch_id) values ('South Trust', 'trust', 'United Kingdom', 'x', $1) returning id", [HARTLEY_DB.southBranch])).rows[0].id;
+      await db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'trustee', $2)", [NORTH_TRUST, other]);
+      await switchUser(db, hub, USERS.hartleyViewerBranch, "aal1");
+      expect(await count(db, `select * from appointments where holder_entity_id = '${other}'`)).toBe(0);
+    });
+  });
+
+  it("a provider's licence is recorded on the provider", async () => {
+    await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
+      await db.query("update outside_organisations set licensed = true, licence_number = 'L-1', regulator = 'Test Regulator' where id = $1", [ORG]);
+      expect((await db.query("select licensed, licence_number from outside_organisations where id = $1", [ORG])).rows[0]).toEqual({ licensed: true, licence_number: "L-1" });
     });
   });
 });

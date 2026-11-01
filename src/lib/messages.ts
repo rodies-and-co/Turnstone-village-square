@@ -57,6 +57,8 @@ export const SAVED_MESSAGES = {
   beneficiary_class_added: "Class of beneficiaries added. Add its members below.",
   class_member_added: "Added to the class.",
   class_member_ended: "Taken out of the class. It stays in the history.",
+  provider_added: "Service provider added. Choose it wherever it is appointed.",
+  provider_saved: "Service provider saved. The change shows everywhere it is appointed.",
   removal_requested: "Removal asked for. Nothing is removed until a Manager who didn't ask approves it on the family Overview.",
   removal_approved: "Removal approved. It has been removed, and a copy is kept with the request.",
   removal_rejected: "Removal turned down. Nothing was removed.",

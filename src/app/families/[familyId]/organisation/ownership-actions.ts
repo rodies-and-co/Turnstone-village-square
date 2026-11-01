@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { matchStandard } from "@/lib/entity-checklist";
 import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
@@ -95,12 +96,18 @@ export async function addShareClass(familyId: string, entityId: string, form: Fo
   const currency = text(form, "currency").toUpperCase();
   const par = text(form, "par_value");
   const authorised = text(form, "authorised");
-  const limited = form.get("limited") === "on";
+  // The Entity Standard decides whether a maximum number of shares must be set.
+  const { data: ent } = await ctx.db!.from("entities").select("jurisdiction, entity_type, sub_type").eq("id", entityId).maybeSingle();
+  const { data: stds } = await ctx.supabase.from("entity_standards").select("jurisdiction, entity_type, sub_type, status, version, authorised_capital");
+  const standard = ent ? matchStandard((stds ?? []) as { jurisdiction: string; entity_type: string; sub_type: string; status: string; version: number; authorised_capital: string }[], ent) : null;
+  const rule = standard?.authorised_capital ?? "optional";
+  const limited = rule === "required" || (rule === "optional" && form.get("limited") === "on");
   if (!name) go(to, "Please name the class, e.g. Ordinary.");
   if (!/^[A-Z]{3}$/.test(currency)) go(to, "The currency should be three letters, e.g. GBP.");
   if (par && !amount(par)) go(to, "The par value should be a number, e.g. 1 or 0.01.");
   if (authorised && !whole(authorised)) go(to, "The number of authorised shares should be a whole number.");
-  if (limited && !authorised) go(to, "Please give the number of shares authorised, or untick the limit.");
+  if (limited && !authorised)
+    go(to, rule === "required" ? "This kind of company must have a maximum number of shares: please give the number authorised." : "Please give the number of shares authorised, or untick the maximum.");
 
   const { data, error } = await ctx
     .db!.from("share_classes")
@@ -108,7 +115,7 @@ export async function addShareClass(familyId: string, entityId: string, form: Fo
     .select("id")
     .single();
   if (error || !data) go(to, ownershipError(error?.message));
-  if (authorised) {
+  if (limited && authorised) {
     const date = text(form, "authorised_on");
     if (date && !isDate(date)) go(to, "Please enter the date as day, month and year.");
     const { error: e } = await ctx.db!.from("share_transactions").insert({

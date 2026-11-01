@@ -99,7 +99,7 @@ describe("Entity Standards: who may do what", () => {
     });
     await as(hub, await user(USERS.superUser), async (db) => {
       await db.query("update entity_standards set filings = 'Updated' where jurisdiction = 'Mauritius' and sub_type = 'Trust'");
-      expect(await count(db, "select * from audit_log where table_name = 'entity_standards' and action = 'update'")).toBe(1);
+      expect(await count(db, `select * from audit_log where table_name = 'entity_standards' and action = 'update' and user_id = '${USERS.superUser}'`)).toBe(1);
     });
   });
 });
@@ -157,6 +157,24 @@ describe("Entity Standards: drafts from families and new versions", () => {
         { version: 1, status: "retired" },
         { version: 2, status: "approved" },
       ]);
+    });
+  });
+});
+
+describe("Entity Standards: authorised share capital", () => {
+  it("is required, optional or none per standard, and a family's new draft copies it", async () => {
+    await as(hub, await user(USERS.superUser), async (db) => {
+      const v = async (j: string, s: string) =>
+        (await db.query("select authorised_capital from entity_standards where jurisdiction = $1 and sub_type = $2", [j, s])).rows[0].authorised_capital;
+      expect(await v("Isle of Man", "2006 Act company")).toBe("optional");
+      expect(await v("Isle of Man", "1931 Act company")).toBe("required");
+      expect(await v("South Africa", "Private company (Pty) Ltd")).toBe("required");
+      expect(await v("South Africa", "Non-profit company NPC")).toBe("none");
+      expect(await v("Isle of Man", "Trust")).toBe("none");
+    });
+    await as(hub, await user(USERS.hartleyManager), async (db) => {
+      await db.query("insert into entity_standards (jurisdiction, entity_type, sub_type, name, status) values ('United Kingdom', 'company', 'Community interest company CIC', 'x', 'draft')");
+      expect((await db.query("select authorised_capital from entity_standards where sub_type = 'Community interest company CIC'")).rows[0].authorised_capital).toBe("optional");
     });
   });
 });

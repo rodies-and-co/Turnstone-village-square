@@ -49,6 +49,14 @@ export default async function StandardPage({
     ["Enforcer", yes(s.enforcer_required)],
     ["Identity verification of officers", yes(s.identity_verification_required)],
     ["Share capital", s.share_capital === "required" ? "Required" : s.share_capital === "optional" ? "Optional" : "None"],
+    [
+      "Authorised share capital",
+      s.authorised_capital === "required"
+        ? "Required: the maximum number of shares is set first"
+        : s.authorised_capital === "optional"
+          ? "Not required (the constitution may set a maximum)"
+          : "None",
+    ],
   ];
   const textBlock = (title: string, body: string | null) =>
     body ? (
@@ -168,6 +176,12 @@ export default async function StandardPage({
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <Select label="Share capital" name="share_capital" options={{ required: "Required", optional: "Optional", none: "None" }} defaultValue={s.share_capital} />
+                    <Select
+                      label="Authorised share capital"
+                      name="authorised_capital"
+                      options={{ required: "Required", optional: "Not required, may be set", none: "None" }}
+                      defaultValue={s.authorised_capital}
+                    />
                     <Select
                       label="Beneficial ownership rule"
                       name="bo_rule"

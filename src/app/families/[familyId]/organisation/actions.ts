@@ -8,6 +8,7 @@ import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
 import { askToRemove } from "@/lib/removal";
 import { addressMatchKey, friendlyError, parseAddress } from "@/lib/people";
+import { REQUIRED_APPOINTEES } from "@/lib/providers";
 import { REQUIREMENT_FIELDS, type EntityStandard } from "@/lib/standards";
 
 // The Organisation. Managers and Administrators add and change; only
@@ -42,6 +43,7 @@ function orgError(message: string | undefined) {
   if (/entities_name/.test(m)) return "There is already an entity with that name.";
   if (/outside_organisations_name/.test(m)) return "There is already an outside organisation with that name. Choose it from the list instead.";
   if (/appointments_current/.test(m)) return "They already hold that role.";
+  if (/appointments_not_itself/.test(m)) return "An entity can't hold a role in itself.";
   if (/foreign key/.test(m) && /share_transactions|settlements|beneficiar/.test(m))
     return "This entity holds shares in, settled, or benefits from another of the family's entities. Those are kept as records, so it can't be removed.";
   if (/base_currency/.test(m)) return "The currency should be three capital letters, e.g. GBP.";
@@ -137,12 +139,46 @@ export async function createEntity(familyId: string, form: FormData) {
     newDraft = true;
   }
 
+  // The corporate roles its standard requires from the start (e.g. an Isle
+  // of Man 2006 Act company's registered agent): checked before anything is saved.
+  const needs = REQUIRED_APPOINTEES.filter((r) => (standard as unknown as Record<string, unknown>)[r.flag]);
+  for (const r of needs) {
+    const choice = text(form, `appoint_${r.role}`);
+    if (!choice) go(back, `Please choose the ${r.label.toLowerCase()}. It is required for this kind of entity.`);
+    if (choice === "new" && !text(form, `appoint_${r.role}_name`)) go(back, `Please type the new ${r.label.toLowerCase()}'s name.`);
+  }
+
   const { data: entity, error } = await ctx.db
     .from("entities")
     .insert({ ...d.value, entity_type: entityType, jurisdiction, sub_type: subType, standard_id: standard.id })
     .select("id")
     .single();
   if (error || !entity) go(back, orgError(error?.message));
+
+  const problems: string[] = [];
+  for (const r of needs) {
+    const choice = text(form, `appoint_${r.role}`);
+    let organisationId: string | null = null;
+    let holderEntityId: string | null = null;
+    if (choice === "new") {
+      const made = await newProvider(ctx, form, `appoint_${r.role}_`, r.kind);
+      if ("error" in made) {
+        problems.push(`${r.label}: ${made.error}`);
+        continue;
+      }
+      organisationId = made.id;
+    } else if (choice.startsWith("organisation:")) organisationId = choice.slice(13);
+    else if (choice.startsWith("entity:") && r.allowEntity) holderEntityId = choice.slice(7);
+    else {
+      problems.push(`${r.label}: please choose again.`);
+      continue;
+    }
+    const { error: e } = await ctx.db
+      .from("appointments")
+      .insert({ entity_id: entity.id, role: r.role, organisation_id: organisationId, holder_entity_id: holderEntityId, appointed_on: d.value.registered_on });
+    if (e) problems.push(`${r.label}: ${orgError(e.message)}`);
+  }
+  if (problems.length) go(`/families/${familyId}/organisation/${entity.id}?tab=officers`, `The entity was added, but not every appointment: ${problems.join(" ")}`);
   go(`/families/${familyId}/organisation/${entity.id}`, undefined, newDraft ? "entity_added_new_standard" : "entity_added");
 }
 
@@ -193,6 +229,29 @@ export async function removeEntity(familyId: string, entityId: string) {
 // ---------------------------------------------------------------------------
 // Officers and appointments
 
+// A new service provider typed into a form (fields `<prefix>name`,
+// `<prefix>kind`, `<prefix>jurisdiction`, `<prefix>licensed`,
+// `<prefix>licence_number`). Returns its id, or an error.
+async function newProvider(ctx: Awaited<ReturnType<typeof getFamilyContext>>, form: FormData, prefix: string, defaultKind = "other") {
+  const name = text(form, `${prefix}name`);
+  const kind = text(form, `${prefix}kind`) || defaultKind;
+  if (!name) return { error: "Please choose the service provider, or type the new provider's name." };
+  if (!(ORG_KINDS as readonly string[]).includes(kind)) return { error: "Please choose what kind of provider it is." };
+  const { data, error } = await ctx
+    .db!.from("outside_organisations")
+    .insert({
+      name,
+      kind,
+      jurisdiction: optional(form, `${prefix}jurisdiction`),
+      licensed: form.get(`${prefix}licensed`) === "on",
+      licence_number: optional(form, `${prefix}licence_number`),
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: orgError(error?.message) };
+  return { id: data.id as string };
+}
+
 export async function addAppointment(familyId: string, entityId: string, form: FormData) {
   const back = `/families/${familyId}/organisation/${entityId}?tab=officers`;
   const ctx = await getFamilyContext(familyId);
@@ -206,26 +265,23 @@ export async function addAppointment(familyId: string, entityId: string, form: F
 
   let personId: string | null = null;
   let organisationId: string | null = null;
+  let holderEntityId: string | null = null;
   if (holder === "person") {
     personId = text(form, "person_id");
     if (!personId) go(back, "Please choose the person. Add them to the Tree first if they aren't there.");
   } else if (holder === "organisation") {
     organisationId = text(form, "organisation_id");
     if (!organisationId) {
-      const name = text(form, "organisation_name");
-      const kind = text(form, "organisation_kind") || "other";
-      if (!name) go(back, "Please choose the organisation, or type the new organisation's name.");
-      if (!(ORG_KINDS as readonly string[]).includes(kind)) go(back, "Please choose what kind of organisation it is.");
-      const { data, error } = await db
-        .from("outside_organisations")
-        .insert({ name, kind, jurisdiction: optional(form, "organisation_jurisdiction") })
-        .select("id")
-        .single();
-      if (error || !data) go(back, orgError(error?.message));
-      organisationId = data.id;
+      const made = await newProvider(ctx, form, "organisation_");
+      if ("error" in made) go(back, made.error);
+      organisationId = made.id;
     }
+  } else if (holder === "entity") {
+    holderEntityId = text(form, "holder_entity_id");
+    if (!holderEntityId) go(back, "Please choose which of the family's entities holds the role.");
+    if (holderEntityId === entityId) go(back, "An entity can't hold a role in itself.");
   } else {
-    go(back, "Please say whether a person or an organisation holds the role.");
+    go(back, "Please say who holds the role.");
   }
 
   const { error } = await db.from("appointments").insert({
@@ -233,10 +289,10 @@ export async function addAppointment(familyId: string, entityId: string, form: F
     role,
     person_id: personId,
     organisation_id: organisationId,
+    holder_entity_id: holderEntityId,
     appointed_on: appointedOn || null,
     resident: form.get("resident") === "on",
-    identity_verified: form.get("identity_verified") === "on",
-    licensed: form.get("licensed") === "on",
+    identity_verified: holder === "person" && form.get("identity_verified") === "on",
     notes: optional(form, "notes"),
   });
   go(back, error ? orgError(error.message) : undefined, "appointment_added");

@@ -203,6 +203,9 @@ begin
   if r ? 'organisation_id' and r->>'organisation_id' is not null then
     parts := parts || (select o.name from public.outside_organisations o where o.id = (r->>'organisation_id')::uuid);
   end if;
+  if r ? 'holder_entity_id' and r->>'holder_entity_id' is not null then
+    parts := parts || (select e.name from public.entities e where e.id = (r->>'holder_entity_id')::uuid);
+  end if;
   if r ? 'entity_id' and r->>'entity_id' is not null then
     parts := parts || (select e.name from public.entities e where e.id = (r->>'entity_id')::uuid);
   end if;

@@ -71,11 +71,16 @@ export default async function OrganisationPage({
         title="The Organisation"
         subtitle="The family's companies, trusts and foundations. Each follows the Entity Standard for its jurisdiction and type."
         actions={
-          ctx.canEdit && (
-            <Link href={`/families/${familyId}/organisation/new`} className="btn-primary">
-              Add entity
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/families/${familyId}/organisation/providers`} className="btn-secondary">
+              Service providers
             </Link>
-          )
+            {ctx.canEdit && (
+              <Link href={`/families/${familyId}/organisation/new`} className="btn-primary">
+                Add entity
+              </Link>
+            )}
+          </div>
         }
       />
       <div className="space-y-5">

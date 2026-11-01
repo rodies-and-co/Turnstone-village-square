@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ConfirmRemove, SubmitButton } from "@/components/feedback";
-import { Card, Checkbox, Chip, Field, Fold, Notice, Row, Rows, Select } from "@/components/ui";
+import { Card, Chip, Field, Fold, Notice, Row, Rows, Select } from "@/components/ui";
 import type { FamilyContext } from "@/lib/family-context";
 import { formatDate } from "@/lib/governance";
 import {
@@ -40,7 +40,7 @@ import {
   removeShareClass,
   removeShareTransaction,
 } from "../ownership-actions";
-import { BeneficiaryForm, SettlementForm, ShareTransactionForm, type HolderOptions } from "./OwnershipForms";
+import { BeneficiaryForm, SettlementForm, ShareClassForm, ShareTransactionForm, type HolderOptions } from "./OwnershipForms";
 
 type Row_ = Record<string, unknown>;
 type Addr = { id: string; line1: string; line2: string | null; city: string; region: string | null; postal_code: string | null; country: string };
@@ -61,7 +61,7 @@ export async function OwnershipTab({
   familyId: string;
   entity: EntityLite & { base_currency: string | null };
   names: Map<string, string>;
-  rule: BoRule | null;
+  rule: (BoRule & { authorised_capital?: "required" | "optional" | "none" }) | null;
 }) {
   const db = ctx.db!;
   const me = ctx.user?.id ?? null;
@@ -69,6 +69,9 @@ export async function OwnershipTab({
   const trustKind = TRUST_TYPES.includes(entity.entity_type);
   const foundation = entity.entity_type === "foundation";
   const units = entity.entity_type === "llc" ? "units" : "shares";
+  // Whether the maximum number of shares must be set (from the Entity
+  // Standard). With no standard, it is offered but not required.
+  const authorisedCapital = rule?.authorised_capital === "required" ? "required" : rule?.authorised_capital === "none" && rule ? "none" : "optional";
 
   // Everything the family records about ownership, for every entity it can
   // see: needed to look through chains of entities for beneficial owners.
@@ -81,7 +84,7 @@ export async function OwnershipTab({
     db.from("beneficiaries").select("*").order("created_at"),
     db.from("beneficiary_classes").select("id, entity_id, name, description").order("name"),
     db.from("beneficiary_class_members").select("id, entity_id, class_id, person_id, added_on, ceased_on"),
-    db.from("appointments").select("entity_id, role, person_id, organisation_id, ceased_on"),
+    db.from("appointments").select("entity_id, role, person_id, organisation_id, holder_entity_id, ceased_on"),
   ]);
   const entities = (ents.data ?? []) as EntityLite[];
   const organisations = (orgs.data ?? []) as { id: string; name: string; jurisdiction: string | null; registration_number: string | null; incorporated_on: string | null; address_id: string | null }[];
@@ -258,21 +261,13 @@ export async function OwnershipTab({
             )}
             {ctx.canEdit && (
               <Fold label={myClasses.length ? "Add another class" : `Add a class of ${units}`}>
-                <form action={addShareClass.bind(null, familyId, entity.id)} className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Field id="class_name" label="Class name" name="name" required defaultValue={myClasses.length ? "" : "Ordinary"} />
-                    <Field id="class_currency" label="Currency" name="currency" required defaultValue={entity.base_currency ?? ""} hint={entity.base_currency ? undefined : "The first class's currency becomes the base currency."} />
-                    <Field id="class_par" label="Par value per share" name="par_value" hint="Leave empty for no par value." />
-                    <Field id="class_authorised" label={`Number of ${units} authorised`} name="authorised" hint="Recorded as the first transaction, for approval." />
-                    <Field id="class_authorised_on" label="Authorised on" name="authorised_on" type="date" />
-                    <Field id="class_resolution" label="Approved by (minute or resolution)" name="resolution" />
-                  </div>
-                  <div className="flex flex-wrap gap-x-6">
-                    <Checkbox label={`Limited to the ${units} authorised`} name="limited" defaultChecked />
-                    <Checkbox label="Carries votes" name="voting" defaultChecked />
-                  </div>
-                  <SubmitButton pendingText="Adding…">Add class</SubmitButton>
-                </form>
+                <ShareClassForm
+                  action={addShareClass.bind(null, familyId, entity.id)}
+                  authorised={authorisedCapital}
+                  units={units}
+                  firstClass={myClasses.length === 0}
+                  currency={entity.base_currency}
+                />
               </Fold>
             )}
           </Card>
@@ -374,6 +369,7 @@ export async function OwnershipTab({
                     classes={myClasses.map((c) => [c.id, `${c.name} (${c.currency})`] as [string, string])}
                     options={options}
                     units={units}
+                    canAuthorise={myClasses.some((c) => c.limited)}
                     firstKind={registers.some((r) => r.authorised > 0 || !r.shareClass.limited) ? "issue" : "authorise"}
                   />
                 </Fold>

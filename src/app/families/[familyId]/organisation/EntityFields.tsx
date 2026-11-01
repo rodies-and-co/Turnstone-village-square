@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ENTITY_TYPES } from "@/lib/entity-checklist";
+import { ENTITY_TYPES, matchStandard } from "@/lib/entity-checklist";
+import { REQUIRED_APPOINTEES, type RequiredAppointee } from "@/lib/providers";
+import { NewProviderFields } from "./ProviderFields";
 import { MONTHS } from "@/lib/people";
 
-type Option = { jurisdiction: string; entity_type: string; sub_type: string; status: string };
+type Option = {
+  jurisdiction: string;
+  entity_type: string;
+  sub_type: string;
+  status: string;
+  version?: number;
+  registered_agent_required?: boolean;
+  management_company_required?: boolean;
+  licensed_trustee_required?: boolean;
+};
 export type EntityValues = {
   name?: string;
   entity_type?: string;
@@ -35,12 +46,18 @@ export function EntityFields({
   people,
   branches,
   lockKind,
+  providers = [],
+  familyEntities = [],
 }: {
   values?: EntityValues;
   standards: Option[];
   people: [string, string][];
   branches: [string, string][];
   lockKind?: boolean;
+  // For a new entity: who can be appointed straight away to the corporate
+  // roles its Entity Standard requires.
+  providers?: [id: string, name: string, licensed: boolean][];
+  familyEntities?: [string, string][];
 }) {
   const jurisdictions = [...new Set(standards.map((s) => s.jurisdiction))].sort();
   const known = (j: string) => jurisdictions.includes(j);
@@ -54,6 +71,8 @@ export function EntityFields({
   const subIsKnown = subTypes.includes(sub);
   const [subChoice, setSubChoice] = useState(values.sub_type ? (subIsKnown ? values.sub_type : OTHER) : "");
   const subValue = subChoice === OTHER || subTypes.length === 0 ? sub : subChoice;
+  const standard = !lockKind && jurisdiction && subValue ? matchStandard(standards.map((x) => ({ version: 1, ...x })), { jurisdiction, entity_type: type, sub_type: subValue }) : null;
+  const required = standard ? REQUIRED_APPOINTEES.filter((r) => standard[r.flag]) : [];
 
   return (
     <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -258,6 +277,65 @@ export function EntityFields({
         </label>
         <textarea id="activity" name="activity" rows={2} defaultValue={values.activity ?? ""} className="text-area" />
       </div>
+      {required.length > 0 && (
+        <fieldset className="space-y-5 rounded-lg border border-border bg-card p-4 sm:col-span-2 lg:col-span-3">
+          <legend className="px-1 font-semibold text-ink">Required from the start</legend>
+          <p className="text-sm text-ink-2">The Entity Standard for {subValue} requires these from the start. They are recorded as appointments when the entity is saved.</p>
+          {required.map((r) => (
+            <AppointeeChoice key={r.role} need={r} providers={providers} familyEntities={familyEntities} />
+          ))}
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+// Choose who holds a required corporate role: a service provider already
+// recorded, one of the family's entities, or a new provider (its fields show
+// only then).
+function AppointeeChoice({
+  need,
+  providers,
+  familyEntities,
+}: {
+  need: RequiredAppointee;
+  providers: [string, string, boolean][];
+  familyEntities: [string, string][];
+}) {
+  const [choice, setChoice] = useState("");
+  const name = `appoint_${need.role}`;
+  return (
+    <div className="space-y-3">
+      <div className="max-w-md">
+        <label htmlFor={name} className={label}>
+          {need.label} (required)
+        </label>
+        <select id={name} name={name} required value={choice} onChange={(e) => setChoice(e.target.value)} className="text-input">
+          <option value="">Choose…</option>
+          {providers.length > 0 && (
+            <optgroup label="Service providers">
+              {providers.map(([id, n, licensed]) => (
+                <option key={id} value={`organisation:${id}`}>
+                  {n}
+                  {need.licensed ? (licensed ? " (licensed)" : " (not recorded as licensed)") : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {need.allowEntity && familyEntities.length > 0 && (
+            <optgroup label="The family's entities">
+              {familyEntities.map(([id, n]) => (
+                <option key={id} value={`entity:${id}`}>
+                  {n}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <option value="new">A new service provider…</option>
+        </select>
+        <p className={hint}>{need.hint}</p>
+      </div>
+      {choice === "new" && <NewProviderFields prefix={`${name}_`} defaultKind={need.kind} requireLicence={need.licensed} />}
     </div>
   );
 }

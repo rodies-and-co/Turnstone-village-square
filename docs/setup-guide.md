@@ -90,7 +90,9 @@ own new project.
    name the branches after their heads and add the family links, and
    `supabase/setup/8-practice-organisation.sql` to add practice entities, then
    `supabase/setup/9-practice-ownership.sql` to add practice share capital,
-   settlors and beneficiaries.
+   settlors and beneficiaries. While you are the only person using the
+   system, `supabase/setup/10-practice-approve.sql` approves whatever is
+   waiting for a second person, as a fictional practice approver.
 
 The hub also gets later files: run every file in `supabase/hub/migrations`
 after the foundation, oldest first, once, in the hub project (for example the

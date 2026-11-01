@@ -55,6 +55,9 @@ export async function saveStandard(id: string, form: FormData) {
   const share = v("share_capital");
   if (!["required", "optional", "none"].includes(share)) back(id, "Please choose the share capital rule.");
   changes.share_capital = share;
+  const authorised = v("authorised_capital");
+  if (!["required", "optional", "none"].includes(authorised)) back(id, "Please choose whether authorised share capital is required.");
+  changes.authorised_capital = authorised;
   const rule = v("bo_rule");
   if (!["more_than", "at_least", "everyone"].includes(rule)) back(id, "Please choose the beneficial ownership rule.");
   changes.bo_rule = rule;
