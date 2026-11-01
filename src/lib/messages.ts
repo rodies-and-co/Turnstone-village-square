@@ -24,6 +24,21 @@ export const SAVED_MESSAGES = {
   member_removed: "Taken out of the branch.",
   branch_renamed: "Branch renamed.",
   branch_removed: "Branch removed. Its members are still in the Tree, without a branch.",
+  body_added: "Governance body added.",
+  body_saved: "Governance body saved.",
+  body_removed: "Governance body removed.",
+  seat_added: "Member added.",
+  seat_ended: "Membership ended. It stays in the history of the body.",
+  seat_removed: "Membership removed.",
+  advisor_added: "Advisor added to the circle.",
+  advisor_saved: "Advisor's details saved.",
+  advisor_role_removed: "Taken out of the circle.",
+  advisor_removed: "Advisor removed.",
+  statement_added: "Statement added as a draft. Another Manager adopts it.",
+  statement_saved: "Wording saved. It is a draft until a Manager who didn't prepare it adopts it.",
+  statement_adopted: "Statement adopted.",
+  statement_withdrawn: "Adoption withdrawn. The statement is a draft again.",
+  statement_removed: "Statement removed.",
 } as const;
 
 export type SavedCode = keyof typeof SAVED_MESSAGES;

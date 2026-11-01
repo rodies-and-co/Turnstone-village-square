@@ -93,9 +93,12 @@ export function Field({
   required,
   hint,
   disabled,
+  id,
 }: {
   label: string;
   name: string;
+  // Needed when the same form appears more than once on a page.
+  id?: string;
   defaultValue?: string | number | null;
   type?: string;
   required?: boolean;
@@ -104,12 +107,12 @@ export function Field({
 }) {
   return (
     <div>
-      <label htmlFor={name} className="mb-1 block text-sm font-medium text-ink">
+      <label htmlFor={id ?? name} className="mb-1 block text-sm font-medium text-ink">
         {label}
         {required ? " (required)" : ""}
       </label>
       <input
-        id={name}
+        id={id ?? name}
         name={name}
         type={type}
         defaultValue={defaultValue ?? ""}
@@ -131,9 +134,11 @@ export function Select({
   required,
   disabled,
   hint,
+  id,
 }: {
   label: string;
   name: string;
+  id?: string;
   options: Record<string, string> | [string, string][];
   defaultValue?: string | null;
   includeBlank?: string;
@@ -144,12 +149,12 @@ export function Select({
   const entries = Array.isArray(options) ? options : Object.entries(options);
   return (
     <div>
-      <label htmlFor={name} className="mb-1 block text-sm font-medium text-ink">
+      <label htmlFor={id ?? name} className="mb-1 block text-sm font-medium text-ink">
         {label}
         {required ? " (required)" : ""}
       </label>
       <select
-        id={name}
+        id={id ?? name}
         name={name}
         defaultValue={defaultValue ?? ""}
         required={required}

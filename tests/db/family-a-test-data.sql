@@ -54,3 +54,24 @@ insert into public.parent_child (parent_id, child_id) values
 
 -- The Branches: Arthur (North) is confirmed as a wealth creator.
 insert into public.wealth_creators (person_id) values ('a2000000-0000-4000-8000-000000000001');
+
+-- Governance: a Family Council (whole family) and a North branch council.
+insert into public.governance_bodies (id, kind, name, branch_id) values
+  ('a5000000-0000-4000-8000-000000000001', 'family_council', 'Hartley Family Council', null),
+  ('a5000000-0000-4000-8000-000000000002', 'branch_council', 'North Branch Council', 'a1000000-0000-4000-8000-000000000001');
+insert into public.body_members (body_id, person_id, role) values
+  ('a5000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'chair'),
+  ('a5000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000002', 'member'),
+  ('a5000000-0000-4000-8000-000000000002', 'a2000000-0000-4000-8000-000000000001', 'chair');
+
+-- Advisors: one firm, advising the whole family and the South branch.
+insert into public.advisors (id, full_name, firm, profession) values
+  ('a6000000-0000-4000-8000-000000000001', 'Test Adviser', 'Example LLP', 'lawyer');
+insert into public.advisor_roles (advisor_id, branch_id, advises_on) values
+  ('a6000000-0000-4000-8000-000000000001', null, 'Trusts and estate planning'),
+  ('a6000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002', 'South branch succession');
+
+-- Statements: the family's purpose (draft), and a North branch value.
+insert into public.family_statements (id, kind, branch_id, title, body) values
+  ('a7000000-0000-4000-8000-000000000001', 'purpose', null, 'Our purpose', 'Test purpose text.'),
+  ('a7000000-0000-4000-8000-000000000002', 'values', 'a1000000-0000-4000-8000-000000000001', 'North values', 'Test values text.');

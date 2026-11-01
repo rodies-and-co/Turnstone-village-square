@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { AppShell, PageTitle } from "@/components/AppShell";
-import { ConfirmRemove, SubmitButton, Toast } from "@/components/feedback";
-import { Alert, Card, Fold, Notice, Row, Rows } from "@/components/ui";
+import { ConfirmRemove, SubmitButton } from "@/components/feedback";
+import { Card, Fold, Notice, Row, Rows } from "@/components/ui";
 import { branchNameFor, branchQuestions, type BAnswer, type BBranch, type BLink, type BPartnership, type BPerson } from "@/lib/branches";
 import { getFamilyContext } from "@/lib/family-context";
-import { errorMessage, savedMessage } from "@/lib/messages";
 import { displayNames, lifeLine } from "@/lib/people";
+import { BranchesFrame } from "./BranchesFrame";
 import {
   addWealthCreator,
   askAgain,
@@ -36,7 +35,6 @@ export default async function BranchesPage({
   const { familyId } = await params;
   const sp = await searchParams;
   const ctx = await getFamilyContext(familyId);
-  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
 
   let people: Person[] = [];
   let links: BLink[] = [];
@@ -97,25 +95,7 @@ export default async function BranchesPage({
   );
 
   return (
-    <AppShell
-      family={{ id: familyId, name: ctx.family.name }}
-      section="branches"
-      crumbs={[["My families", "/"], [familyName, `/families/${familyId}`], ["The Branches"]]}
-      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
-    >
-      {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
-      {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
-
-      <PageTitle
-        eyebrow="Recording the facts"
-        title="The Branches"
-        subtitle="Branches come from the wealth creators: each of their children may head a branch. Nothing changes until a Manager says yes."
-      />
-
-      <div className="space-y-5">
-        {sp.error && <p className="alert">Not saved: {errorMessage(sp.error)}</p>}
-        {!ctx.db && <Alert>This family&apos;s database isn&apos;t connected yet.</Alert>}
-
+    <BranchesFrame ctx={ctx} familyId={familyId} tab="branches" saved={sp.saved} error={sp.error}>
         {/* 1. Wealth creators */}
         <Card title="Wealth creators" description="The people who created the family's wealth. A Manager confirms them; they are never assumed.">
           {creators.length === 0 ? (
@@ -345,7 +325,6 @@ export default async function BranchesPage({
             </Fold>
           </Card>
         )}
-      </div>
-    </AppShell>
+    </BranchesFrame>
   );
 }
