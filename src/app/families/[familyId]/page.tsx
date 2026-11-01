@@ -8,6 +8,8 @@ import { roleInFamily } from "@/lib/roles";
 export const dynamic = "force-dynamic";
 
 // The sections of the plan. Each becomes a working page in later stages.
+// Items listed in READY already have a working page.
+const READY: Record<string, string> = { "The Tree": "tree" };
 const SECTIONS = [
   { title: "Recording the facts", items: ["The Tree", "The Branches", "The Organisation", "The Story", "The Vault"] },
   { title: "Things to do", items: ["Meetings, resolutions and notes", "Projects", "Dividends and distributions", "Share transactions", "Risk management"] },
@@ -86,10 +88,20 @@ export default async function FamilyPage({ params }: { params: Promise<{ familyI
               <h2 className="text-lg font-semibold text-ink">{s.title}</h2>
               <ul className="mt-2 list-disc pl-5 text-ink">
                 {s.items.map((i) => (
-                  <li key={i}>{i}</li>
+                  <li key={i}>
+                    {READY[i] && status.connected ? (
+                      <Link href={`/families/${family.id}/${READY[i]}`} className="inline-flex min-h-11 items-center font-semibold underline">
+                        {i}
+                      </Link>
+                    ) : (
+                      i
+                    )}
+                  </li>
                 ))}
               </ul>
-              <p className="mt-3 text-sm text-ink">Coming in a later stage.</p>
+              <p className="mt-3 text-sm text-ink">
+                {s.items.some((i) => READY[i]) ? "Underlined items are ready. The rest come in later stages." : "Coming in a later stage."}
+              </p>
             </section>
           ))}
         </div>
