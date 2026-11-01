@@ -1,7 +1,10 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { ConfirmRemove, SubmitButton } from "@/components/feedback";
 import { Card, Facts, Field, Notice, Select } from "@/components/ui";
 import type { FamilyContext } from "@/lib/family-context";
 import {
+  siblingKinds,
   ADDRESS_KINDS,
   MEMBER_TYPES,
   PARENT_KINDS,
@@ -13,6 +16,7 @@ import {
   formatAddress,
 } from "@/lib/people";
 import { PersonFields } from "../PersonFields";
+import { RelationshipForm } from "./RelationshipForm";
 import {
   addAddress,
   addLink,
@@ -62,15 +66,9 @@ function formatDate(d: string | null | undefined) {
   return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-// A "Remove" button for one row, shown to Managers only.
+// A "Remove" button for one row, shown to Managers only. It asks first.
 function RemoveButton({ action, what }: { action: () => Promise<void>; what: string }) {
-  return (
-    <form action={action}>
-      <button type="submit" className="btn-secondary" aria-label={`Remove ${what}`}>
-        Remove
-      </button>
-    </form>
-  );
+  return <ConfirmRemove action={action} what={what} />;
 }
 
 function PrivateNote({ ctx }: { ctx: FamilyContext }) {
@@ -93,8 +91,13 @@ export function LaterTab({ title, children }: { title: string; children: ReactNo
 // ---------------------------------------------------------------------------
 
 export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
-  const { data: branches } = await ctx.db!.from("branches").select("id, name").order("name");
+  const [{ data: branches }, { data: details }] = await Promise.all([
+    ctx.db!.from("branches").select("id, name").order("name"),
+    // The full date is private: only editors (and the person themself) get it back.
+    ctx.db!.from("person_details").select("date_of_birth").eq("person_id", personId).maybeSingle(),
+  ]);
   const branchName = (branches ?? []).find((b: { id: string }) => b.id === person.branch_id)?.name;
+  const dob: string | null = details?.date_of_birth ?? null;
 
   return (
     <>
@@ -106,7 +109,7 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
             ["Maiden name", person.maiden_name],
             ["Known as", person.known_as],
             ["Type of member", MEMBER_TYPES[person.member_type]],
-            ["Year of birth", person.birth_year],
+            ["Date of birth", dob ? formatDate(dob) : person.birth_year ? `${person.birth_year} (day and month not known)` : null],
             ["Three circle role", label(THREE_CIRCLE_ROLES, person.three_circle_role)],
             ["Branch", branchName],
             ["Deceased", person.deceased ? "Yes" : "No"],
@@ -118,10 +121,8 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
       {ctx.canEdit && (
         <Card title="Edit overview">
           <form action={updatePerson.bind(null, familyId, personId)} className="space-y-5">
-            <PersonFields values={person} branches={branches ?? []} canChooseBranch={ctx.canManage} />
-            <button type="submit" className="btn-primary">
-              Save changes
-            </button>
+            <PersonFields values={{ ...person, date_of_birth: dob }} branches={branches ?? []} canChooseBranch={ctx.canManage} />
+            <SubmitButton>Save changes</SubmitButton>
           </form>
         </Card>
       )}
@@ -132,11 +133,9 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
             This removes the person and their personal details, addresses, documents and family links. The change is
             recorded in the history. It can&apos;t be undone from here.
           </p>
-          <form action={removePerson.bind(null, familyId, personId)} className="mt-4">
-            <button type="submit" className="btn-secondary">
-              Remove {person.known_as || person.full_names} from the Tree
-            </button>
-          </form>
+          <div className="mt-4">
+            <ConfirmRemove action={removePerson.bind(null, familyId, personId)} what={`${person.known_as || person.full_names} from the Tree`} />
+          </div>
         </Card>
       )}
     </>
@@ -145,7 +144,7 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
 
 // ---------------------------------------------------------------------------
 
-export async function IdentityTab({ ctx, familyId, personId }: Props) {
+export async function IdentityTab({ ctx, familyId, personId, person }: Props) {
   const db = ctx.db!;
   const [{ data: details }, { data: passports }] = await Promise.all([
     db.from("person_details").select("*").eq("person_id", personId).maybeSingle(),
@@ -161,7 +160,10 @@ export async function IdentityTab({ ctx, familyId, personId }: Props) {
         <Card title="Birth and personal details">
           <Facts
             items={[
-              ["Date of birth", formatDate(d.date_of_birth)],
+              [
+                "Date of birth",
+                formatDate(d.date_of_birth) ?? (person.birth_year ? `${person.birth_year} (day and month not known)` : null),
+              ],
               ["Place of birth", [d.city_of_birth, d.country_of_birth].filter(Boolean).join(", ")],
               ["Sex", label(SEX_OPTIONS, d.sex)],
               ["Email", d.email],
@@ -175,9 +177,15 @@ export async function IdentityTab({ ctx, familyId, personId }: Props) {
 
       {ctx.canEdit && (
         <Card title="Edit personal details">
+          <p className="mb-4 text-sm text-ink">
+            The date of birth is changed under{" "}
+            <Link href={`/families/${familyId}/tree/${personId}?tab=overview`} className="underline">
+              Overview
+            </Link>
+            , so it is only entered once.
+          </p>
           <form action={saveDetails.bind(null, familyId, personId)} className="space-y-5">
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Date of birth" name="date_of_birth" type="date" defaultValue={d.date_of_birth} />
               <Select label="Sex" name="sex" options={SEX_OPTIONS} defaultValue={d.sex ?? "unspecified"} />
               <Field label="Town or city of birth" name="city_of_birth" defaultValue={d.city_of_birth} />
               <Field label="Country of birth" name="country_of_birth" defaultValue={d.country_of_birth} />
@@ -192,9 +200,7 @@ export async function IdentityTab({ ctx, familyId, personId }: Props) {
               />
               <Field label="Psychometric consent date" name="psychometric_consent_date" type="date" defaultValue={d.psychometric_consent_date} />
             </div>
-            <button type="submit" className="btn-primary">
-              Save personal details
-            </button>
+            <SubmitButton>Save personal details</SubmitButton>
           </form>
         </Card>
       )}
@@ -223,9 +229,7 @@ export async function IdentityTab({ ctx, familyId, personId }: Props) {
               <Field label="Country" name="country" required />
               <Field label="Number" name="number" required />
               <Field label="Expires" name="expires_on" type="date" />
-              <button type="submit" className="btn-secondary">
-                Add passport
-              </button>
+              <SubmitButton variant="secondary">Add passport</SubmitButton>
             </form>
           )}
         </Card>
@@ -298,9 +302,7 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
                 <Field label="Postcode" name="postal_code" />
                 <Field label="Country" name="country" />
               </div>
-              <button type="submit" className="btn-secondary">
-                Add address
-              </button>
+              <SubmitButton variant="secondary">Add address</SubmitButton>
             </form>
           )}
         </Card>
@@ -328,9 +330,7 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
             <form action={addPhone.bind(null, familyId, personId)} className="mt-4 grid gap-4 sm:grid-cols-3 sm:items-end">
               <Field label="Label" name="label" defaultValue="Mobile" />
               <Field label="Number" name="number" type="tel" required />
-              <button type="submit" className="btn-secondary">
-                Add number
-              </button>
+              <SubmitButton variant="secondary">Add number</SubmitButton>
             </form>
           )}
           <p className="mt-4 text-sm text-ink">The email address is edited under Identity.</p>
@@ -342,108 +342,154 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
 
 // ---------------------------------------------------------------------------
 
-export async function RelationshipsTab({ ctx, familyId, personId, everyone, names }: Props) {
+type Kin = { key: string; personId: string; description: string; remove?: () => Promise<void>; removeWhat?: string };
+
+function KinGroup({ title, rows, empty, familyId, name, canManage, note }: {
+  title: string;
+  rows: Kin[];
+  empty: string;
+  familyId: string;
+  name: (id: string) => string;
+  canManage: boolean;
+  note?: string;
+}) {
+  return (
+    <div>
+      <h3 className="font-semibold text-ink">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="mt-1 text-ink">{empty}</p>
+      ) : (
+        <ul className="mt-1 divide-y divide-border">
+          {rows.map((r) => (
+            <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-2">
+              <span className="text-ink">
+                <Link href={`/families/${familyId}/tree/${r.personId}?tab=relationships`} className="inline-flex min-h-11 items-center font-medium underline">
+                  {name(r.personId)}
+                </Link>{" "}
+                · {r.description}
+              </span>
+              {canManage && r.remove && <RemoveButton action={r.remove} what={r.removeWhat ?? "this link"} />}
+            </li>
+          ))}
+        </ul>
+      )}
+      {note && rows.length > 0 && <p className="mt-1 text-sm text-ink">{note}</p>}
+    </div>
+  );
+}
+
+type PartnerRow = { id: string; person_a: string; person_b: string; kind: string; start_date: string | null; end_date: string | null; end_reason: string | null };
+
+export async function RelationshipsTab({ ctx, familyId, personId, person, everyone, names }: Props) {
   const db = ctx.db!;
-  const [{ data: parentLinks }, { data: childLinks }, { data: partners }] = await Promise.all([
+  const [{ data: parentLinks }, { data: childLinks }, { data: allPartners }] = await Promise.all([
     db.from("parent_child").select("id, parent_id, kind").eq("child_id", personId),
     db.from("parent_child").select("id, child_id, kind").eq("parent_id", personId),
-    db
-      .from("partnerships")
-      .select("id, person_a, person_b, kind, start_date, end_date, end_reason")
-      .or(`person_a.eq.${personId},person_b.eq.${personId}`)
-      .order("start_date", { nullsFirst: false }),
+    // Every partnership this user can see: needed to suggest a second parent.
+    db.from("partnerships").select("id, person_a, person_b, kind, start_date, end_date, end_reason").order("start_date", { nullsFirst: false }),
   ]);
+  const parents = (parentLinks ?? []) as { id: string; parent_id: string; kind: string }[];
+  const children = (childLinks ?? []) as { id: string; child_id: string; kind: string }[];
+  const partnerships = (allPartners ?? []) as PartnerRow[];
+  const mine = partnerships.filter((l) => l.person_a === personId || l.person_b === personId);
+
+  // Brothers and sisters are worked out from shared parents, never typed in.
+  const parentIds = parents.map((l) => l.parent_id);
+  const { data: viaParents } = parentIds.length
+    ? await db.from("parent_child").select("child_id").in("parent_id", parentIds).neq("child_id", personId)
+    : { data: [] };
+  const siblingIds = [...new Set(((viaParents ?? []) as { child_id: string }[]).map((l) => l.child_id))];
+  const { data: siblingParentLinks } = siblingIds.length
+    ? await db.from("parent_child").select("parent_id, child_id, kind").in("child_id", siblingIds)
+    : { data: [] };
+  const siblingRowsRaw = siblingKinds(
+    parents.map((l) => ({ parent_id: l.parent_id, kind: l.kind })),
+    (siblingParentLinks ?? []) as { parent_id: string; child_id: string; kind: string }[],
+  );
 
   const name = (id: string) => names.get(id) ?? "Someone you can't see";
-  const others = everyone.filter((p) => p.id !== personId).map((p) => [p.id, names.get(p.id) ?? p.surname] as [string, string]);
+  const kindOf = (k: string) => label(PARENT_KINDS, k) ?? "";
 
+  const parentRows: Kin[] = parents.map((l) => ({
+    key: l.id,
+    personId: l.parent_id,
+    description: `${kindOf(l.kind)} parent`,
+    remove: removeParentLink.bind(null, familyId, personId, l.id),
+    removeWhat: `the link to ${name(l.parent_id)}`,
+  }));
+  const partnerRows: Kin[] = mine.map((l) => {
+    const other = l.person_a === personId ? l.person_b : l.person_a;
+    const bits = [
+      label(PARTNERSHIP_KINDS, l.kind),
+      l.start_date ? `from ${formatDate(l.start_date)}` : null,
+      l.end_date ? `ended ${formatDate(l.end_date)}${l.end_reason ? ` (${label(PARTNERSHIP_END_REASONS, l.end_reason)?.toLowerCase()})` : ""}` : "current",
+    ];
+    return {
+      key: l.id,
+      personId: other,
+      description: bits.filter(Boolean).join(" · "),
+      remove: removePartnership.bind(null, familyId, personId, l.id),
+      removeWhat: `the partnership with ${name(other)}`,
+    };
+  });
+  const childRows: Kin[] = children.map((l) => ({
+    key: l.id,
+    personId: l.child_id,
+    description: `${kindOf(l.kind)} child`,
+    remove: removeParentLink.bind(null, familyId, personId, l.id),
+    removeWhat: `the link to ${name(l.child_id)}`,
+  }));
+  const siblingRows: Kin[] = siblingRowsRaw
+    .filter((r) => names.has(r.id))
+    .map((r) => ({ key: r.id, personId: r.id, description: r.label }))
+    .sort((a, b) => name(a.personId).localeCompare(name(b.personId)));
+
+  // For the form: who is currently with whom.
+  const currentPartners: Record<string, string[]> = {};
+  for (const l of partnerships.filter((x) => !x.end_date)) {
+    (currentPartners[l.person_a] ??= []).push(l.person_b);
+    (currentPartners[l.person_b] ??= []).push(l.person_a);
+  }
+  const me = { id: personId, name: name(personId), birth_year: person.birth_year };
+  const people = everyone
+    .filter((p) => p.id !== personId)
+    .map((p) => ({ id: p.id, name: names.get(p.id) ?? p.surname, birth_year: p.birth_year }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const group = { familyId, name, canManage: ctx.canManage };
   return (
     <>
-      <Card title="Parents">
-        {(parentLinks ?? []).length === 0 ? (
-          <p className="text-ink">None recorded.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {(parentLinks ?? []).map((l: { id: string; parent_id: string; kind: string }) => (
-              <li key={l.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <span className="text-ink">
-                  {name(l.parent_id)} · {label(PARENT_KINDS, l.kind)} parent
-                </span>
-                {ctx.canManage && <RemoveButton action={removeParentLink.bind(null, familyId, personId, l.id)} what="this link" />}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card title="Children">
-        {(childLinks ?? []).length === 0 ? (
-          <p className="text-ink">None recorded.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {(childLinks ?? []).map((l: { id: string; child_id: string; kind: string }) => (
-              <li key={l.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <span className="text-ink">
-                  {name(l.child_id)} · {label(PARENT_KINDS, l.kind)} child
-                </span>
-                {ctx.canManage && <RemoveButton action={removeParentLink.bind(null, familyId, personId, l.id)} what="this link" />}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card title="Marriages and partnerships">
-        {(partners ?? []).length === 0 ? (
-          <p className="text-ink">None recorded.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {(partners ?? []).map(
-              (l: { id: string; person_a: string; person_b: string; kind: string; start_date: string | null; end_date: string | null; end_reason: string | null }) => {
-                const other = l.person_a === personId ? l.person_b : l.person_a;
-                return (
-                  <li key={l.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                    <span className="text-ink">
-                      {label(PARTNERSHIP_KINDS, l.kind)} to {name(other)}
-                      {l.start_date ? ` · from ${formatDate(l.start_date)}` : ""}
-                      {l.end_date ? ` · ended ${formatDate(l.end_date)}` : " · current"}
-                      {l.end_reason ? ` (${label(PARTNERSHIP_END_REASONS, l.end_reason)?.toLowerCase()})` : ""}
-                    </span>
-                    {ctx.canManage && <RemoveButton action={removePartnership.bind(null, familyId, personId, l.id)} what="this partnership" />}
-                  </li>
-                );
-              },
-            )}
-          </ul>
-        )}
+      <Card title={`${me.name}'s family`}>
+        <div className="space-y-6">
+          <KinGroup title="Parents" rows={parentRows} empty="None recorded." {...group} />
+          <KinGroup title="Spouse / Partner" rows={partnerRows} empty="None recorded." {...group} />
+          <KinGroup title="Children" rows={childRows} empty="None recorded." {...group} />
+          <KinGroup
+            title="Brothers and sisters"
+            rows={siblingRows}
+            empty={parentIds.length ? "None recorded." : "Shown once parents are recorded."}
+            note="Worked out from shared parents, so there is nothing to add here. A half-sibling shares one birth or adoptive parent; a step-sibling is linked only through a step or foster parent."
+            {...group}
+          />
+        </div>
+        <p className="mt-6 text-sm text-ink">
+          Each link is recorded once and shows on both people&apos;s records: &ldquo;Parent of&rdquo; on one is &ldquo;Child of&rdquo; on the other.
+        </p>
       </Card>
 
       {ctx.canEdit && (
-        <Card title="Add a family link">
-          <form action={addLink.bind(null, familyId, personId)} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Select
-                label="Link"
-                name="link"
-                options={[
-                  ["parent", "Add a parent of this person"],
-                  ["child", "Add a child of this person"],
-                  ["partner", "Add a marriage or partnership"],
-                ]}
-                required
-              />
-              <Select label="Other person" name="other_id" options={others} includeBlank="Choose…" required />
-              <Select label="Kind of parent (for parents and children)" name="parent_kind" options={PARENT_KINDS} defaultValue="birth" />
-              <Select label="Kind of partnership" name="partnership_kind" options={PARTNERSHIP_KINDS} defaultValue="marriage" />
-              <Field label="Partnership started" name="start_date" type="date" />
-              <Field label="Partnership ended" name="end_date" type="date" />
-              <Select label="Reason it ended" name="end_reason" options={PARTNERSHIP_END_REASONS} includeBlank="Still current" />
-            </div>
-            <p className="text-sm text-ink">The person must already be in the Tree. Add them first if they aren&apos;t.</p>
-            <button type="submit" className="btn-secondary">
-              Add link
-            </button>
-          </form>
+        <Card title="Add a relationship">
+          <RelationshipForm
+            action={addLink.bind(null, familyId, personId)}
+            me={me}
+            people={people}
+            existing={{
+              parents: parentIds,
+              children: children.map((l) => l.child_id),
+              partners: mine.map((l) => (l.person_a === personId ? l.person_b : l.person_a)),
+            }}
+            currentPartners={currentPartners}
+          />
         </Card>
       )}
 
@@ -482,9 +528,7 @@ export async function FinancesTab({ ctx, familyId, personId }: Props) {
             <form action={addTaxNumber.bind(null, familyId, personId)} className="mt-4 grid gap-4 sm:grid-cols-3 sm:items-end">
               <Field label="Country" name="country" required />
               <Field label="Tax number" name="number" required />
-              <button type="submit" className="btn-secondary">
-                Add tax number
-              </button>
+              <SubmitButton variant="secondary">Add tax number</SubmitButton>
             </form>
           )}
         </Card>

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
-import { Alert, BackLink, Notice, PageShell } from "@/components/ui";
+import { Toast } from "@/components/feedback";
+import { Alert, BackLink, PageShell } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
+import { savedMessage } from "@/lib/messages";
 import { MEMBER_TYPES, THREE_CIRCLE_ROLES, displayNames, matchesSearch, type MemberType } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +26,10 @@ export default async function TreePage({
   searchParams,
 }: {
   params: Promise<{ familyId: string }>;
-  searchParams: Promise<{ q?: string; removed?: string }>;
+  searchParams: Promise<{ q?: string; saved?: string }>;
 }) {
   const { familyId } = await params;
-  const { q = "", removed } = await searchParams;
+  const { q = "", saved } = await searchParams;
   const ctx = await getFamilyContext(familyId);
 
   let people: Row[] = [];
@@ -68,11 +70,7 @@ export default async function TreePage({
           )}
         </div>
 
-        {removed && (
-          <div className="mt-4">
-            <Notice>The person has been removed.</Notice>
-          </div>
-        )}
+        {saved && <Toast key={`s-${saved}-${Date.now()}`} message={savedMessage(saved)!} />}
         {!ctx.db && (
           <div className="mt-4">
             <Alert>This family&apos;s database isn&apos;t connected yet.</Alert>

@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SubmitButton } from "@/components/feedback";
 import { Alert, BackLink, Card, PageShell } from "@/components/ui";
 import { PersonFields } from "../PersonFields";
 import { createPerson } from "../actions";
 import { getFamilyContext } from "@/lib/family-context";
+import { errorMessage } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,7 @@ export default async function NewPersonPage({
         <h1 className="mt-2 text-2xl font-semibold text-ink">Add a person</h1>
         {error && (
           <div className="mt-4">
-            <Alert>{error}</Alert>
+            <Alert>Not saved: {errorMessage(error)}</Alert>
           </div>
         )}
         <div className="mt-6">
@@ -39,9 +41,7 @@ export default async function NewPersonPage({
               <p className="text-sm text-ink">
                 You can add personal details, addresses and family links after saving.
               </p>
-              <button type="submit" className="btn-primary">
-                Save person
-              </button>
+              <SubmitButton pendingText="Adding…">Save person</SubmitButton>
             </form>
           </Card>
         </div>

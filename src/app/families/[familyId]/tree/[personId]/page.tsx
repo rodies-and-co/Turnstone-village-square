@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
-import { Alert, BackLink, Notice, PageShell } from "@/components/ui";
+import { Toast } from "@/components/feedback";
+import { BackLink, PageShell } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
+import { errorMessage, savedMessage } from "@/lib/messages";
 import { displayNames, type PersonSummary } from "@/lib/people";
 import { AddressesTab, FinancesTab, HistoryTab, IdentityTab, LaterTab, OverviewTab, RelationshipsTab } from "./tabs";
 
@@ -77,8 +79,12 @@ export default async function PersonPage({
         </nav>
 
         <div className="mt-6 space-y-6">
-          {sp.error && <Alert>{sp.error}</Alert>}
-          {sp.saved && !sp.error && <Notice>Saved.</Notice>}
+          {/* The error shows on the page and as a message at the bottom of the
+              screen (wherever the person has scrolled to); only the message is
+              read out, so screen readers don't hear it twice. */}
+          {sp.error && <p className="alert">Not saved: {errorMessage(sp.error)}</p>}
+          {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
+          {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
 
           {tab === "overview" && <OverviewTab {...shared} />}
           {tab === "identity" && <IdentityTab {...shared} />}

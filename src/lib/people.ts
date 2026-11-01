@@ -39,11 +39,17 @@ export const ADDRESS_KINDS = { home: "Home", postal: "Postal", work: "Work", oth
 
 export const PARENT_KINDS = { birth: "Birth", adopted: "Adopted", step: "Step", foster: "Foster" } as const;
 
+// Shown under the heading "Spouse / Partner".
 export const PARTNERSHIP_KINDS = {
-  marriage: "Marriage",
+  marriage: "Married (spouse)",
   civil_partnership: "Civil partnership",
-  partner: "Partner",
+  partner: "Partner (not married)",
 } as const;
+
+export const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
 
 export const PARTNERSHIP_END_REASONS = { divorce: "Divorce", separation: "Separation", death: "Death" } as const;
 
@@ -88,6 +94,37 @@ export function matchesSearch(p: PersonSummary & { maiden_name?: string | null }
     .some((v) => String(v).toLowerCase().includes(q));
 }
 
+// Brothers and sisters, worked out from parents recorded on both sides.
+// Birth and adoptive parents count as "real" parents for this; step and
+// foster parents don't.
+//   Sibling      - the same birth/adoptive parents on both sides
+//   Half-sibling - at least one birth/adoptive parent shared, but not all
+//   Step-sibling - connected only through a step or foster parent
+export function siblingKinds(
+  myParents: { parent_id: string; kind: string }[],
+  theirLinks: { parent_id: string; child_id: string; kind: string }[],
+): { id: string; label: "Sibling" | "Half-sibling" | "Step-sibling" }[] {
+  const real = (k: string) => k === "birth" || k === "adopted";
+  const mine = new Set(myParents.map((l) => l.parent_id));
+  const myReal = new Set(myParents.filter((l) => real(l.kind)).map((l) => l.parent_id));
+  const byChild = new Map<string, { parent_id: string; kind: string }[]>();
+  for (const l of theirLinks) byChild.set(l.child_id, [...(byChild.get(l.child_id) ?? []), l]);
+
+  const out: { id: string; label: "Sibling" | "Half-sibling" | "Step-sibling" }[] = [];
+  for (const [id, links] of byChild) {
+    if (!links.some((l) => mine.has(l.parent_id))) continue;
+    const theirReal = new Set(links.filter((l) => real(l.kind)).map((l) => l.parent_id));
+    const sharedReal = [...theirReal].filter((p) => myReal.has(p));
+    if (sharedReal.length === 0) {
+      out.push({ id, label: "Step-sibling" });
+    } else {
+      const same = theirReal.size === myReal.size && [...theirReal].every((p) => myReal.has(p));
+      out.push({ id, label: same ? "Sibling" : "Half-sibling" });
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Form checks. Each returns { ok: true, value } or { ok: false, error } with a
 // message in plain English.
@@ -119,6 +156,7 @@ export function parsePersonForm(form: FormData): Result<{
   known_as: string | null;
   member_type: MemberType;
   birth_year: number | null;
+  date_of_birth: string | null;
   deceased: boolean;
   three_circle_role: ThreeCircleRole | null;
 }> {
@@ -130,15 +168,8 @@ export function parsePersonForm(form: FormData): Result<{
   const memberType = text(form, "member_type");
   if (!oneOf(memberType, MEMBER_TYPES)) return { ok: false, error: "Please choose the type of member." };
 
-  const yearText = text(form, "birth_year");
-  let birth_year: number | null = null;
-  if (yearText) {
-    if (!/^\d{4}$/.test(yearText)) return { ok: false, error: "The year of birth should be four digits, e.g. 1975." };
-    birth_year = Number(yearText);
-    if (birth_year < 1850 || birth_year > new Date().getFullYear()) {
-      return { ok: false, error: "The year of birth doesn't look right." };
-    }
-  }
+  const birth = parseBirthDate(form);
+  if (!birth.ok) return birth;
 
   const role = text(form, "three_circle_role");
   if (role && !oneOf(role, THREE_CIRCLE_ROLES)) return { ok: false, error: "Please choose a three circle role from the list." };
@@ -151,15 +182,42 @@ export function parsePersonForm(form: FormData): Result<{
       maiden_name: optional(form, "maiden_name"),
       known_as: optional(form, "known_as"),
       member_type: memberType,
-      birth_year,
+      birth_year: birth.value.year,
+      date_of_birth: birth.value.date,
       deceased: form.get("deceased") === "on",
       three_circle_role: role ? (role as ThreeCircleRole) : null,
     },
   };
 }
 
+// The date of birth is entered once, as day, month and year. The year on its
+// own is enough when that is all that is known.
+export function parseBirthDate(form: FormData): Result<{ year: number | null; date: string | null }> {
+  const yearText = text(form, "birth_year");
+  const dayText = text(form, "birth_day");
+  const monthText = text(form, "birth_month");
+  if (!yearText) {
+    if (dayText || monthText) return { ok: false, error: "Please add the year of birth too." };
+    return { ok: true, value: { year: null, date: null } };
+  }
+  if (!/^\d{4}$/.test(yearText)) return { ok: false, error: "The year of birth should be four digits, e.g. 1975." };
+  const year = Number(yearText);
+  if (year < 1850 || year > new Date().getFullYear()) return { ok: false, error: "The year of birth doesn't look right." };
+  if (!dayText && !monthText) return { ok: true, value: { year, date: null } };
+  if (!dayText || !monthText) {
+    return { ok: false, error: "Please give both the day and the month of birth, or leave both empty if only the year is known." };
+  }
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (!Number.isInteger(day) || !Number.isInteger(month) || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    return { ok: false, error: "That date of birth doesn't exist. Please check the day and month." };
+  }
+  if (d.getTime() > Date.now()) return { ok: false, error: "The date of birth can't be in the future." };
+  return { ok: true, value: { year, date: d.toISOString().slice(0, 10) } };
+}
+
 export function parseDetailsForm(form: FormData): Result<{
-  date_of_birth: string | null;
   city_of_birth: string | null;
   country_of_birth: string | null;
   sex: keyof typeof SEX_OPTIONS;
@@ -168,13 +226,11 @@ export function parseDetailsForm(form: FormData): Result<{
   relationship_to_wealth: keyof typeof RELATIONSHIP_TO_WEALTH | null;
   psychometric_consent_date: string | null;
 }> {
-  for (const f of ["date_of_birth", "date_of_death", "psychometric_consent_date"]) {
+  for (const f of ["date_of_death", "psychometric_consent_date"]) {
     const v = text(form, f);
     if (v && !isDate(v)) return { ok: false, error: "Please enter dates as day, month and year." };
   }
-  const dob = optional(form, "date_of_birth");
   const dod = optional(form, "date_of_death");
-  if (dob && dod && dod < dob) return { ok: false, error: "The date of death can't be before the date of birth." };
 
   const email = optional(form, "email");
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "That email address doesn't look right." };
@@ -188,7 +244,6 @@ export function parseDetailsForm(form: FormData): Result<{
   return {
     ok: true,
     value: {
-      date_of_birth: dob,
       city_of_birth: optional(form, "city_of_birth"),
       country_of_birth: optional(form, "country_of_birth"),
       sex,
@@ -255,6 +310,9 @@ export function formatAddress(a: {
 export function friendlyError(message: string | undefined) {
   const m = message ?? "";
   if (/own ancestor/.test(m)) return "That link would make someone their own ancestor.";
+  // The database's own sense checks on family links explain themselves.
+  if (/^Family link: /.test(m)) return m.replace(/^Family link: /, "");
+  if (/person_details_check/.test(m)) return "The date of death can't be before the date of birth.";
   if (/two birth parents/.test(m)) return "A person can have at most two birth parents.";
   if (/Only a Manager/.test(m)) return m;
   if (/duplicate key/.test(m)) return "That is already recorded.";

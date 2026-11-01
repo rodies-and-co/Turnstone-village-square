@@ -70,9 +70,47 @@ body {
     font-weight: 500;
   }
 
-  .btn-primary:disabled {
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  /* Pressed buttons give an immediate response. */
+  .btn-primary,
+  .btn-secondary {
+    gap: 0.5rem;
+    transition: transform 80ms ease, background-color 120ms ease;
+  }
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--muted);
+  }
+
+  /* Confirmation messages after saving: slide in at the bottom of the screen. */
+  .toast {
+    animation: toast-in 200ms ease-out;
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toast,
+    .btn-primary,
+    .btn-secondary {
+      animation: none;
+      transition: none;
+    }
   }
 
   .text-input {

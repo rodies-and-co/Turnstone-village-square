@@ -1,7 +1,7 @@
 -- FAMILY project (practice families only). Adds fictional people and
 -- branches so there is something to look at. Never use for a real family.
 
-insert into public.branches (name) values ('First branch'), ('Second branch')
+insert into public.branches (name) values ('Tom Hartley Branch'), ('Sarah Hartley Branch')
 on conflict (name) do nothing;
 
 insert into public.people (member_type, full_names, surname, known_as, birth_year, three_circle_role, branch_id)
@@ -12,9 +12,9 @@ from public.family_settings s,
 (values
   ('family', 'George William', null, 'George', 1946, 'family_leader', null),
   ('family', 'Margaret Ann', null, 'Maggie', 1949, 'family_owner', null),
-  ('family', 'Thomas George', null, 'Tom', 1975, 'family_employee', 'First branch'),
-  ('family', 'Sarah Jane', null, 'Sarah', 1978, 'family_owner', 'Second branch'),
-  ('family_not_succession', 'Emily Rose', null, 'Emily', 2004, 'family_member', 'First branch'),
+  ('family', 'Thomas George', null, 'Tom', 1975, 'family_employee', 'Tom Hartley Branch'),
+  ('family', 'Sarah Jane', null, 'Sarah', 1978, 'family_owner', 'Sarah Hartley Branch'),
+  ('family_not_succession', 'Emily Rose', null, 'Emily', 2004, 'family_member', 'Tom Hartley Branch'),
   ('non_family', 'Peter John', 'Marsh', 'Peter', 1968, 'employee', null)
 ) as v(member_type, full_names, surname, known_as, birth_year, three_circle_role, branch);
 

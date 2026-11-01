@@ -88,6 +88,12 @@ These rules are permanent. Follow them in every change.
   `public/Turnstone-Logo.jpg`.
 - Keep navigation simple: one to-do list (with views), no scattered duplicates.
 - The family's governing document is always called the "Family Constitution".
+- Every button gives feedback: it shows it is working straight away (e.g.
+  "Saving…"), and a message confirms what happened. Removing anything asks
+  "Are you sure?" first.
+- Follow industry best practice rather than copying earlier prototypes
+  (Lovable). Information is entered once (e.g. one date of birth) and shown
+  wherever it is needed; family links are stored once and show on both people.
 
 ## Accessibility
 

@@ -1,5 +1,5 @@
 import { Checkbox, Field, Select } from "@/components/ui";
-import { MEMBER_TYPES, THREE_CIRCLE_ROLES } from "@/lib/people";
+import { MEMBER_TYPES, MONTHS, THREE_CIRCLE_ROLES } from "@/lib/people";
 
 export type PersonValues = {
   full_names?: string;
@@ -11,7 +11,56 @@ export type PersonValues = {
   deceased?: boolean;
   three_circle_role?: string | null;
   branch_id?: string | null;
+  date_of_birth?: string | null;
 };
+
+// Date of birth, entered once: the year on its own, or the full date.
+function BirthDateFields({ year, date }: { year?: number | null; date?: string | null }) {
+  const [, m, d] = date ? date.split("-").map(Number) : [];
+  return (
+    <fieldset className="sm:col-span-2">
+      <legend className="mb-1 font-medium text-ink">Date of birth</legend>
+      <div className="grid max-w-md grid-cols-[5rem_1fr_6rem] gap-3">
+        <div>
+          <label htmlFor="birth_day" className="mb-1 block text-sm text-ink">
+            Day
+          </label>
+          <select id="birth_day" name="birth_day" defaultValue={d ?? ""} className="text-input">
+            <option value="">—</option>
+            {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="birth_month" className="mb-1 block text-sm text-ink">
+            Month
+          </label>
+          <select id="birth_month" name="birth_month" defaultValue={m ?? ""} className="text-input">
+            <option value="">—</option>
+            {MONTHS.map((name, i) => (
+              <option key={name} value={i + 1}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="birth_year" className="mb-1 block text-sm text-ink">
+            Year
+          </label>
+          <input id="birth_year" name="birth_year" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} defaultValue={year ?? ""} className="text-input" placeholder="e.g. 1975" />
+        </div>
+      </div>
+      <p className="mt-1 text-sm text-ink">
+        If only the year is known, fill in the year and leave the day and month empty. The full date is private:
+        Viewers only see the year.
+      </p>
+    </fieldset>
+  );
+}
 
 // The fields of a person's Overview, shared by "Add a person" and "Edit".
 export function PersonFields({
@@ -35,13 +84,7 @@ export function PersonFields({
         hint="The name used every day. If two people share it, the year of birth is shown too."
       />
       <Select label="Type of member" name="member_type" options={MEMBER_TYPES} defaultValue={values.member_type} includeBlank="Choose…" required />
-      <Field
-        label="Year of birth"
-        name="birth_year"
-        type="number"
-        defaultValue={values.birth_year}
-        hint="Filled in for you once a full date of birth is recorded."
-      />
+      <BirthDateFields year={values.birth_year} date={values.date_of_birth} />
       <Select
         label="Three circle role"
         name="three_circle_role"

@@ -86,6 +86,8 @@ own new project.
 6. **SQL Editor**: run every later file in `supabase/family/migrations`, oldest
    first (for example `20261102000000_tree.sql` for The Tree). Each family
    project needs every one of these files, run once.
+7. Practice families only: run `supabase/setup/7-practice-tree-update.sql` to
+   name the branches after their heads and add the family links.
 6. Note this project's **Project URL** (Project Settings → Data API) and its
    **Publishable key** (Project Settings → API Keys, starts `sb_publishable_`).
 

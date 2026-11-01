@@ -441,24 +441,24 @@ values (
 -- ---------------------------------------------------------------------------
 
 insert into public.branches (name, description) values
-  ('Pieter branch', 'Descendants of Pieter Visser'),
-  ('Marieke branch', 'Descendants of Marieke van Dijk (born Visser)');
+  ('Pieter Visser Branch', 'Descendants of Pieter Visser'),
+  ('Marieke van Dijk Branch', 'Descendants of Marieke van Dijk (born Visser)');
 
 insert into public.people (member_type, full_names, surname, maiden_name, known_as, birth_year, three_circle_role, branch_id) values
   ('family', 'Johannes Hendrik', 'Visser', null, 'Hans', 1944, 'family_leader', null),
   ('family', 'Elisabeth Maria', 'Visser', 'Bakker', 'Lies', 1947, 'family_owner', null),
   ('family', 'Pieter Johannes', 'Visser', null, 'Pieter', 1972, 'family_employee',
-     (select id from public.branches where name = 'Pieter branch')),
+     (select id from public.branches where name = 'Pieter Visser Branch')),
   ('family', 'Sanne', 'Visser', 'de Boer', 'Sanne', 1975, 'family_member',
-     (select id from public.branches where name = 'Pieter branch')),
+     (select id from public.branches where name = 'Pieter Visser Branch')),
   ('family', 'Daan Pieter', 'Visser', null, 'Daan', 2001, 'family_owner',
-     (select id from public.branches where name = 'Pieter branch')),
+     (select id from public.branches where name = 'Pieter Visser Branch')),
   ('family', 'Marieke Elisabeth', 'van Dijk', 'Visser', 'Marieke', 1976, 'family_owner',
-     (select id from public.branches where name = 'Marieke branch')),
+     (select id from public.branches where name = 'Marieke van Dijk Branch')),
   ('family_not_succession', 'Thomas', 'van Dijk', null, 'Tom', 1974, 'family_member',
-     (select id from public.branches where name = 'Marieke branch')),
+     (select id from public.branches where name = 'Marieke van Dijk Branch')),
   ('family', 'Lotte Marieke', 'van Dijk', null, 'Lotte', 2005, 'family_member',
-     (select id from public.branches where name = 'Marieke branch')),
+     (select id from public.branches where name = 'Marieke van Dijk Branch')),
   ('non_family', 'Willem', 'Jansen', null, 'Willem', 1965, 'employee', null);
 
 -- Check: 9 people in 2 branches.

@@ -129,7 +129,8 @@ describe("the Tree: who can change what", () => {
     const whole = await signedIn(USERS.hartleyViewerWholeFamily, "aal1");
     await expect(
       as(hartley, whole, (db) =>
-        db.query("insert into parent_child (parent_id, child_id) values ($1, $2)", [HARTLEY_DB.southPerson, HARTLEY_DB.northPerson]),
+        // A link that would otherwise make sense, so only the access rules refuse it.
+        db.query("insert into parent_child (parent_id, child_id, kind) values ($1, $2, 'step')", [HARTLEY_DB.northPerson, HARTLEY_DB.ownPerson]),
       ),
     ).rejects.toThrow(/row-level security/);
   });
@@ -224,6 +225,87 @@ describe("the Tree: keeping the records sound", () => {
     await asOwner(hartley, async (db) => {
       await db.query("update passports set country = 'Ireland' where number = 'TEST1001'");
       expect(await count(db, "select * from audit_log where table_name = 'passports' and action = 'update'")).toBe(1);
+    });
+  });
+});
+
+describe("the Tree: sense checks on family links", () => {
+  it("a birth parent must be born before their child; a step-parent may be younger", async () => {
+    await asOwner(hartley, async (db) => {
+      const { rows } = await db.query(
+        "insert into people (member_type, full_names, surname, birth_year) values ('family', 'Young', 'Hartley', 1990) returning id",
+      );
+      await expect(
+        db.query("insert into parent_child (parent_id, child_id, kind) values ($1, $2, 'birth')", [rows[0].id, HARTLEY_DB.ownPerson]),
+      ).rejects.toThrow(/Family link: A parent must be born before their child/);
+    });
+    await asOwner(hartley, async (db) => {
+      const { rows } = await db.query(
+        "insert into people (member_type, full_names, surname, birth_year) values ('family', 'Young', 'Hartley', 1990) returning id",
+      );
+      await db.query("insert into parent_child (parent_id, child_id, kind) values ($1, $2, 'step')", [rows[0].id, HARTLEY_DB.ownPerson]);
+    });
+  });
+
+  it("a year or date of birth can't be changed to put a parent after their child", async () => {
+    await asOwner(hartley, async (db) => {
+      // North (1948) is the birth parent of the own-record person (1980).
+      await expect(db.query("update people set birth_year = 1985 where id = $1", [HARTLEY_DB.southPerson])).rejects.toThrow(
+        /Family link: 1985 would make this person born after/,
+      );
+    });
+    const admin = await signedIn(USERS.hartleyAdministrator);
+    await as(hartley, admin, async (db) => {
+      await expect(
+        db.query("update person_details set date_of_birth = '2021-01-01' where person_id = $1", [HARTLEY_DB.northPerson]),
+      ).rejects.toThrow(/Family link:/);
+    });
+    await as(hartley, admin, async (db) => {
+      await expect(
+        db.query("update person_details set date_of_birth = '1979-01-01' where person_id = $1", [HARTLEY_DB.ownPerson]),
+      ).resolves.toBeTruthy();
+    });
+    await as(hartley, admin, async (db) => {
+      await expect(
+        db.query("update person_details set date_of_birth = '1940-01-01' where person_id = $1", [HARTLEY_DB.ownPerson]),
+      ).rejects.toThrow(/born before \(or in the same year as\) their own birth parent/);
+    });
+  });
+
+  it("spouses or partners can't also be parent and child, either way round", async () => {
+    await asOwner(hartley, async (db) => {
+      // North and South are married in the test data.
+      await expect(
+        db.query("insert into parent_child (parent_id, child_id, kind) values ($1, $2, 'step')", [HARTLEY_DB.northPerson, HARTLEY_DB.southPerson]),
+      ).rejects.toThrow(/Family link: These two are recorded as spouses or partners/);
+    });
+    await asOwner(hartley, async (db) => {
+      // North is the parent of the own-record person.
+      await expect(
+        db.query("insert into partnerships (person_a, person_b, kind) values ($1, $2, 'partner')", [HARTLEY_DB.ownPerson, HARTLEY_DB.northPerson]),
+      ).rejects.toThrow(/Family link: These two are recorded as parent and child/);
+    });
+  });
+
+  it("an Administrator gets the same checks", async () => {
+    await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
+      await expect(
+        db.query("insert into parent_child (parent_id, child_id, kind) values ($1, $2, 'step')", [HARTLEY_DB.northPerson, HARTLEY_DB.southPerson]),
+      ).rejects.toThrow(/Family link:/);
+    });
+  });
+});
+
+describe("branches are named after the person who heads them", () => {
+  it("records the head, and keeps the branch if the head is removed", async () => {
+    await asOwner(hartley, async (db) => {
+      await db.query("update branches set name = 'Arthur Hartley Branch', head_person_id = $1 where id = $2", [
+        HARTLEY_DB.northPerson,
+        HARTLEY_DB.northBranch,
+      ]);
+      await db.query("delete from people where id = $1", [HARTLEY_DB.northPerson]);
+      const { rows } = await db.query("select name, head_person_id from branches where id = $1", [HARTLEY_DB.northBranch]);
+      expect(rows[0]).toEqual({ name: "Arthur Hartley Branch", head_person_id: null });
     });
   });
 });

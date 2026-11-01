@@ -5,9 +5,11 @@ import {
   friendlyError,
   matchesSearch,
   parseAddress,
+  parseBirthDate,
   parseDetailsForm,
   parsePersonForm,
   parsePhone,
+  siblingKinds,
 } from "@/lib/people";
 
 const form = (fields: Record<string, string>) => {
@@ -53,6 +55,7 @@ describe("person form", () => {
         known_as: null,
         member_type: "family",
         birth_year: 1978,
+        date_of_birth: null,
         deceased: false,
         three_circle_role: "family_owner",
       },
@@ -73,13 +76,34 @@ describe("person form", () => {
   });
 });
 
+describe("date of birth (entered once)", () => {
+  it("accepts the year alone, or a full date", () => {
+    expect(parseBirthDate(form({ birth_year: "1978" }))).toEqual({ ok: true, value: { year: 1978, date: null } });
+    expect(parseBirthDate(form({ birth_year: "1978", birth_month: "3", birth_day: "9" }))).toEqual({
+      ok: true,
+      value: { year: 1978, date: "1978-03-09" },
+    });
+    expect(parseBirthDate(form({}))).toEqual({ ok: true, value: { year: null, date: null } });
+  });
+
+  it("refuses half a date, a date that doesn't exist, or a future date", () => {
+    expect(parseBirthDate(form({ birth_year: "1978", birth_month: "3" }))).toMatchObject({ ok: false, error: /both the day and the month/ });
+    expect(parseBirthDate(form({ birth_day: "9", birth_month: "3" }))).toMatchObject({ ok: false, error: /year/ });
+    expect(parseBirthDate(form({ birth_year: "1979", birth_month: "2", birth_day: "29" }))).toMatchObject({ ok: false, error: /doesn't exist/ });
+    expect(parseBirthDate(form({ birth_year: "1980", birth_month: "2", birth_day: "29" }))).toMatchObject({ ok: true });
+    const next = new Date().getFullYear();
+    expect(parseBirthDate(form({ birth_year: String(next), birth_month: "12", birth_day: "31" }))).toMatchObject({ ok: false });
+  });
+});
+
 describe("personal details form", () => {
   it("checks dates and email", () => {
-    expect(parseDetailsForm(form({ date_of_birth: "1970-03-09", date_of_death: "1960-01-01" }))).toMatchObject({ ok: false });
-    expect(parseDetailsForm(form({ date_of_birth: "09/03/1970" }))).toMatchObject({ ok: false });
+    expect(parseDetailsForm(form({ date_of_death: "09/03/1970" }))).toMatchObject({ ok: false });
     expect(parseDetailsForm(form({ email: "not an email" }))).toMatchObject({ ok: false });
-    const ok = parseDetailsForm(form({ date_of_birth: "1970-03-09", email: "a@b.co", sex: "male" }));
-    expect(ok).toMatchObject({ ok: true, value: { date_of_birth: "1970-03-09", sex: "male", relationship_to_wealth: null } });
+    const ok = parseDetailsForm(form({ date_of_death: "2020-03-09", email: "a@b.co", sex: "male" }));
+    expect(ok).toMatchObject({ ok: true, value: { date_of_death: "2020-03-09", sex: "male", relationship_to_wealth: null } });
+    // The date of birth is not part of this form; it is entered once, with the year.
+    expect(ok.ok && "date_of_birth" in ok.value).toBe(false);
   });
 });
 
@@ -106,5 +130,22 @@ describe("error messages", () => {
     expect(friendlyError("This link would make a person their own ancestor")).toMatch(/own ancestor/);
     expect(friendlyError("new row violates row-level security policy")).toMatch(/permission/);
     expect(friendlyError("something odd")).toMatch(/Something went wrong/);
+  });
+});
+
+describe("brothers and sisters", () => {
+  const birth = (parent_id: string) => ({ parent_id, kind: "birth" });
+  const link = (parent_id: string, child_id: string, kind = "birth") => ({ parent_id, child_id, kind });
+
+  it("tells siblings, half-siblings and step-siblings apart", () => {
+    const me = [birth("mum"), birth("dad"), { parent_id: "stepmum", kind: "step" }];
+    const result = siblingKinds(me, [
+      link("mum", "full"), link("dad", "full"),
+      link("dad", "half"), link("other-mum", "half"),
+      link("stepmum", "step"), link("stepmum-ex", "step"),
+      link("mum", "half-step-dad"), link("dad", "half-step-dad", "step"),
+    ]);
+    const label = Object.fromEntries(result.map((r) => [r.id, r.label]));
+    expect(label).toEqual({ full: "Sibling", half: "Half-sibling", step: "Step-sibling", "half-step-dad": "Half-sibling" });
   });
 });
