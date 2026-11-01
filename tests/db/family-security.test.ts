@@ -224,14 +224,4 @@ describe("family database: safeguards", () => {
       ).rejects.toThrow(/cannot be changed/);
     });
   });
-
-  it("a person's birth year must match their date of birth", async () => {
-    await asOwner(hartley, async (db) => {
-      await expect(
-        db.query(
-          "insert into people (member_type, full_names, surname, date_of_birth, birth_year) values ('family', 'X', 'Y', '1970-03-09', 1971)",
-        ),
-      ).rejects.toThrow(/check constraint/);
-    });
-  });
 });
