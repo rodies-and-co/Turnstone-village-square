@@ -227,7 +227,8 @@ export function Initials({ name, size = "md", strong }: { name: string; size?: "
 export function UnderlineTabs({ label, items, current }: { label: string; items: [key: string, text: string, href: string][]; current: string }) {
   return (
     <nav aria-label={label} className="border-b border-border">
-      <ul className="-mb-px flex gap-1 overflow-x-auto">
+      {/* Tabs wrap onto more rows on narrower screens, so none is hidden off the edge. */}
+      <ul className="-mb-px flex flex-wrap gap-x-1">
         {items.map(([key, text, href]) => {
           const active = key === current;
           return (
