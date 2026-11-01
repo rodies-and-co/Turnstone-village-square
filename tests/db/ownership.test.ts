@@ -206,6 +206,23 @@ describe("Ownership: share transactions are prepared by one person and approved 
     });
   });
 
+  it("certificates are numbered automatically, in order, when transactions are approved", async () => {
+    await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
+      const issue = await draft(db, "issue", 10, SOUTH); // certificates 1 and 2 are taken (and 3 is on another draft)
+      const part = await draft(db, "transfer", 30, SOUTH, NORTH); // North keeps 70
+      const all = await draft(db, "transfer", 70, SOUTH, NORTH); // North keeps none
+      await become(db, USERS.hartleyManager);
+      const certs = async (id: string) => (await db.query("select certificate_number as c, balance_certificate_number as b from share_transactions where id = $1", [id])).rows[0];
+      expect(await certs(issue)).toEqual({ c: null, b: null }); // not until approved
+      await db.query(APPROVE, [issue]);
+      expect(await certs(issue)).toEqual({ c: "3", b: null });
+      await db.query(APPROVE, [part]);
+      expect(await certs(part)).toEqual({ c: "4", b: "5" });
+      await db.query(APPROVE, [all]);
+      expect(await certs(all)).toEqual({ c: "6", b: null });
+    });
+  });
+
   it("a certificate number is used once per class", async () => {
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
       const dup = await draft(db, "issue", 1, SOUTH, null, "1");

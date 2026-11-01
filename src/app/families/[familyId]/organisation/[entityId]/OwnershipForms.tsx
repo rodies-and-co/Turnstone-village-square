@@ -159,6 +159,7 @@ export function ShareTransactionForm({
   firstKind,
   units = "shares",
   canAuthorise = true,
+  holders = {},
 }: {
   action: (form: FormData) => Promise<void>;
   classes: [string, string][];
@@ -166,8 +167,15 @@ export function ShareTransactionForm({
   firstKind: "authorise" | "issue";
   units?: "shares" | "units";
   canAuthorise?: boolean; // only classes with a maximum can have more authorised
+  // The current holders of each class (from the register), with how many
+  // they can still transfer: the only choices for "From".
+  holders?: Record<string, { value: string; name: string; available: number }[]>;
 }) {
   const [kind, setKind] = useState<string>(firstKind);
+  const [classId, setClassId] = useState(classes[0]?.[0] ?? "");
+  const [from, setFrom] = useState("");
+  const current = holders[classId] ?? [];
+  const giver = current.find((h) => h.value === from);
   const today = new Date().toISOString().slice(0, 10);
   return (
     <form action={action} className="space-y-5">
@@ -208,7 +216,17 @@ export function ShareTransactionForm({
           <label htmlFor="class_id" className={label}>
             Class (required)
           </label>
-          <select id="class_id" name="class_id" required className="text-input">
+          <select
+            id="class_id"
+            name="class_id"
+            required
+            value={classId}
+            onChange={(e) => {
+              setClassId(e.target.value);
+              setFrom("");
+            }}
+            className="text-input"
+          >
             {classes.map(([id, n]) => (
               <option key={id} value={id}>
                 {n}
@@ -236,19 +254,39 @@ export function ShareTransactionForm({
           <input
             id="shares"
             name="shares"
-            inputMode="numeric"
+            type="number"
+            min={1}
+            max={kind === "transfer" && giver ? giver.available : undefined}
+            step={1}
             required
             className="text-input"
           />
+          {kind === "transfer" && giver && (
+            <p className="mt-1 text-xs text-ink-3">
+              At most {giver.available.toLocaleString("en-GB")}: what {giver.name} holds and hasn&apos;t already put in another transfer.
+            </p>
+          )}
         </div>
       </div>
       {kind === "transfer" && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <HolderSelect
-            name="from"
-            title="From (the transferor)"
-            options={options}
-          />
+          <div className="max-w-md">
+            <label htmlFor="from" className={label}>
+              From (required)
+            </label>
+            <select id="from" name="from" required value={from} onChange={(e) => setFrom(e.target.value)} className="text-input">
+              <option value="">Choose a current holder…</option>
+              {current.map((h) => (
+                <option key={h.value} value={h.value} disabled={h.available <= 0}>
+                  {h.name}: {h.available.toLocaleString("en-GB")} {units}
+                  {h.available <= 0 ? " (all in other transfers)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-ink-3">
+              {current.length ? "Only the current holders of this class are listed." : "Nobody holds shares of this class yet."}
+            </p>
+          </div>
         </div>
       )}
       {kind !== "authorise" && (
@@ -263,34 +301,6 @@ export function ShareTransactionForm({
       {kind !== "authorise" && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label htmlFor="certificate_number" className={label}>
-              {kind === "issue"
-                ? "Certificate number"
-                : "New certificate number"}
-            </label>
-            <input
-              id="certificate_number"
-              name="certificate_number"
-              className="text-input"
-            />
-          </div>
-          {kind === "transfer" && (
-            <div>
-              <label htmlFor="balance_certificate_number" className={label}>
-                Balance certificate number
-              </label>
-              <input
-                id="balance_certificate_number"
-                name="balance_certificate_number"
-                className="text-input"
-              />
-              <p className="mt-1 text-xs text-ink-3">
-                For the shares the transferor keeps. Their old certificates are
-                cancelled.
-              </p>
-            </div>
-          )}
-          <div>
             <label htmlFor="consideration" className={label}>
               Amount paid
             </label>
@@ -304,6 +314,10 @@ export function ShareTransactionForm({
               In the currency of the class.
             </p>
           </div>
+          <p className="self-end text-sm text-ink-3 sm:col-span-2">
+            Certificate numbers are given automatically, one after the other, when the transaction is approved
+            {kind === "transfer" ? ": the new holder's first, then a balance certificate if the transferor keeps some." : "."}
+          </p>
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2">

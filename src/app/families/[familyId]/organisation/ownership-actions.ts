@@ -6,7 +6,7 @@ import { matchStandard } from "@/lib/entity-checklist";
 import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
-import { INTERESTS, TRANSACTION_KINDS, holderColumns } from "@/lib/ownership";
+import { INTERESTS, TRANSACTION_KINDS, holderColumns, holderFrom } from "@/lib/ownership";
 import { friendlyError } from "@/lib/people";
 import { askToRemove } from "@/lib/removal";
 
@@ -152,16 +152,46 @@ export async function recordShareTransaction(familyId: string, entityId: string,
   if (!whole(shares)) go(to, "The number of shares should be a whole number.");
   if (consideration && !amount(consideration)) go(to, "The amount paid should be a number.");
 
+  // The transferor is checked first, before anything (such as a new
+  // provider for the receiver) is saved.
   let holders: Record<string, string | null> = {};
+  let from: Record<string, string | null> | null = null;
+  if (kind === "transfer") {
+    const choice = text(form, "from");
+    const giver = holderColumns(choice, "from_");
+    if (!giver) go(to, "Please choose who the shares are transferred from.");
+    // Only a current holder can transfer, and not more than they hold (less
+    // anything already in another transfer waiting for approval).
+    const { data: rows } = await ctx.db!.from("share_transactions").select("*").eq("class_id", classId).eq("entity_id", entityId);
+    const all = (rows ?? []) as Record<string, unknown>[];
+    const key = choice;
+    const is = (r: Record<string, unknown>, prefix: "to_" | "from_") => {
+      const h = holderFrom(r, prefix);
+      return h ? `${h.kind}:${h.id}` === key : false;
+    };
+    const held = all
+      .filter((r) => r.status === "approved" && r.kind !== "authorise")
+      .reduce((n, r) => n + (is(r, "to_") ? Number(r.shares) : 0) - (r.kind === "transfer" && is(r, "from_") ? Number(r.shares) : 0), 0);
+    const waiting = all.filter((r) => r.status === "draft" && r.kind === "transfer" && is(r, "from_")).reduce((n, r) => n + Number(r.shares), 0);
+    if (held <= 0) go(to, "They don't hold any shares of this class, so they can't transfer any.");
+    if (num(shares) > held - waiting)
+      go(
+        to,
+        waiting
+          ? `They hold ${held.toLocaleString("en-GB")} shares of this class, of which ${waiting.toLocaleString("en-GB")} are already in a transfer waiting for approval, so at most ${(held - waiting).toLocaleString("en-GB")} can be transferred.`
+          : `They hold ${held.toLocaleString("en-GB")} shares of this class, so at most that many can be transferred.`,
+      );
+    from = giver;
+  }
   if (kind !== "authorise") {
     const receiver = await chosenHolder(ctx, form, "to", "to_");
     if ("error" in receiver) go(to, receiver.error);
     holders = { ...receiver.value };
   }
-  if (kind === "transfer") {
-    const giver = await chosenHolder(ctx, form, "from", "from_");
-    if ("error" in giver) go(to, giver.error);
-    holders = { ...holders, ...giver.value };
+  if (from) {
+    if (`${holders.to_person_id ?? holders.to_organisation_id ?? holders.to_entity_id}` === `${from.from_person_id ?? from.from_organisation_id ?? from.from_entity_id}`)
+      go(to, "The shares need to go to someone else.");
+    holders = { ...holders, ...from };
   }
 
   const { error } = await ctx.db!.from("share_transactions").insert({
@@ -171,8 +201,7 @@ export async function recordShareTransaction(familyId: string, entityId: string,
     transaction_date: date,
     shares: num(shares),
     ...holders,
-    certificate_number: kind === "authorise" ? null : optional(form, "certificate_number"),
-    balance_certificate_number: kind === "transfer" ? optional(form, "balance_certificate_number") : null,
+    // Certificate numbers are given when the transaction is approved.
     consideration: consideration ? num(consideration) : null,
     resolution: optional(form, "resolution"),
     notes: optional(form, "notes"),

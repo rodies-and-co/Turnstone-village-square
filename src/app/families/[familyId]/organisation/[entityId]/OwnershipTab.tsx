@@ -225,6 +225,9 @@ export async function OwnershipTab({
       .join(" · ");
 
   const drafts = myTx.filter((t) => t.status === "draft");
+  // Shares already in draft transfers out, so the same shares aren't offered twice.
+  const pendingOut = (classId: string, h: Holder) =>
+    drafts.filter((t) => t.kind === "transfer" && t.class_id === classId && t.from && holderKey(t.from) === holderKey(h)).reduce((n, t) => n + Number(t.shares), 0);
   const approved = myTx.filter((t) => t.status === "approved").reverse();
   const owners = rule ? beneficialOwners(entity.id, graph, rule) : [];
 
@@ -370,6 +373,16 @@ export async function OwnershipTab({
                     options={options}
                     units={units}
                     canAuthorise={myClasses.some((c) => c.limited)}
+                    holders={Object.fromEntries(
+                      registers.map((r) => [
+                        r.shareClass.id,
+                        r.holdings.map((h) => ({
+                          value: `${h.holder.kind}:${h.holder.id}`,
+                          name: nameOf(h.holder),
+                          available: h.shares - pendingOut(r.shareClass.id, h.holder),
+                        })),
+                      ]),
+                    )}
                     firstKind={registers.some((r) => r.authorised > 0 || !r.shareClass.limited) ? "issue" : "authorise"}
                   />
                 </Fold>
