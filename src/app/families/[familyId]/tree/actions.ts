@@ -16,6 +16,7 @@ import {
   PARTNERSHIP_KINDS,
 } from "@/lib/people";
 import type { SavedCode } from "@/lib/messages";
+import { askToRemove } from "@/lib/removal";
 
 // Every change goes to the family's own database as the signed-in person, so
 // the database decides whether it is allowed. These checks only give a clear
@@ -97,11 +98,8 @@ export async function updatePerson(familyId: string, personId: string, form: For
 
 export async function removePerson(familyId: string, personId: string) {
   const ctx = await getFamilyContext(familyId);
-  if (!ctx.db || !ctx.canManage) done(familyId, personId, "overview", "Only a Manager can remove a person.");
-  const { error } = await ctx.db.from("people").delete().eq("id", personId);
-  if (error) done(familyId, personId, "overview", friendlyError(error.message));
-  revalidatePath(`/families/${familyId}/tree`);
-  redirect(`/families/${familyId}/tree?saved=person_removed`);
+  const error = await askToRemove(ctx, "people", personId);
+  done(familyId, personId, "overview", error ?? undefined, "removal_requested");
 }
 
 // ---------------------------------------------------------------------------
@@ -133,12 +131,12 @@ export async function addPassport(familyId: string, personId: string, form: Form
   done(familyId, personId, "identity", error ? friendlyError(error.message) : undefined, "passport_added");
 }
 
-// Removing is for Managers only; the database checks this too.
+// Removing takes two people: this asks, and a Manager who didn't ask
+// approves it on the family Overview. The database checks this too.
 async function removeRow(familyId: string, personId: string, tab: string, table: string, id: string) {
   const ctx = await getFamilyContext(familyId);
-  if (!ctx.db || !ctx.canManage) done(familyId, personId, tab, "Only a Manager can remove this.");
-  const { error } = await ctx.db.from(table).delete().eq("id", id);
-  done(familyId, personId, tab, error ? friendlyError(error.message) : undefined, "removed");
+  const error = await askToRemove(ctx, table, id);
+  done(familyId, personId, tab, error ?? undefined, "removal_requested");
 }
 
 export async function removePassport(familyId: string, personId: string, id: string) {

@@ -6,6 +6,7 @@ import { APPOINTMENT_ROLES, ENTITY_TYPES, closestStandard, matchStandard } from 
 import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
+import { askToRemove } from "@/lib/removal";
 import { addressMatchKey, friendlyError, parseAddress } from "@/lib/people";
 import { REQUIREMENT_FIELDS, type EntityStandard } from "@/lib/standards";
 
@@ -185,10 +186,8 @@ export async function setRegisteredOffice(familyId: string, entityId: string, fo
 
 export async function removeEntity(familyId: string, entityId: string) {
   const ctx = await getFamilyContext(familyId);
-  if (!ctx.db || !ctx.canManage) go(`/families/${familyId}/organisation/${entityId}`, "Only a Manager can remove an entity.");
-  const { error } = await ctx.db.from("entities").delete().eq("id", entityId);
-  if (error) go(`/families/${familyId}/organisation/${entityId}`, orgError(error.message));
-  go(`/families/${familyId}/organisation`, undefined, "entity_removed");
+  const error = await askToRemove(ctx, "entities", entityId);
+  go(`/families/${familyId}/organisation/${entityId}`, error ?? undefined, "removal_requested");
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +258,6 @@ export async function endAppointment(familyId: string, entityId: string, appoint
 export async function removeAppointment(familyId: string, entityId: string, appointmentId: string) {
   const back = `/families/${familyId}/organisation/${entityId}?tab=officers`;
   const ctx = await getFamilyContext(familyId);
-  if (!ctx.db || !ctx.canManage) go(back, "Only a Manager can remove an appointment from the history.");
-  const { error } = await ctx.db.from("appointments").delete().eq("id", appointmentId).eq("entity_id", entityId);
-  go(back, error ? orgError(error.message) : undefined, "appointment_removed");
+  const error = await askToRemove(ctx, "appointments", appointmentId, { entity_id: entityId });
+  go(back, error ?? undefined, "removal_requested");
 }

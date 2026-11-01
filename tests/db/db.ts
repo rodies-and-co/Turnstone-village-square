@@ -135,3 +135,25 @@ export async function tablesWithRls(client: Client) {
   );
   return rows as { table: string; rls: boolean }[];
 }
+
+// Switches the signed-in user inside an open transaction (as in `as`), so a
+// sequence of steps by different people can be tested in one go.
+export async function switchUser(db: Client, hub: Client, id: string, aal: "aal1" | "aal2" = "aal2") {
+  const claims = await hubClaims(hub, id);
+  await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ ...claims, sub: id, role: "authenticated", aal })]);
+}
+
+// Removing takes two people: one asks, another Manager approves.
+export async function removeWithApproval(
+  db: Client,
+  hub: Client,
+  table: string,
+  id: string,
+  asker: string = USERS.hartleyAdministrator,
+  approver: string = USERS.hartleyManager,
+) {
+  await switchUser(db, hub, asker);
+  const request = (await db.query("select public.request_removal($1, $2) as id", [table, id])).rows[0].id as string;
+  await switchUser(db, hub, approver);
+  return (await db.query("select public.decide_removal($1, true) as result", [request])).rows[0].result as string;
+}

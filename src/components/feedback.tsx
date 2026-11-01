@@ -43,16 +43,23 @@ export function SubmitButton({
   );
 }
 
-// "Remove" asks once before removing, because removing can't be undone here.
+// "Remove" asks once before asking for the removal (which another Manager
+// approves); other labels such as "End" ask once before doing it.
 // Keyboard focus moves to "Keep" when it asks, and back to "Remove" if kept.
 export function ConfirmRemove({
   action,
   what,
   label = "Remove",
+  asks,
+  primary,
 }: {
   action: () => Promise<void>;
   what: string;
   label?: string;
+  // true: the button asks for a removal, which another Manager approves
+  // (the default for "Remove").
+  asks?: boolean;
+  primary?: boolean; // show the first button as a main (dark) button
 }) {
   const [asking, setAsking] = useState(false);
   const [moved, setMoved] = useState(false);
@@ -69,7 +76,7 @@ export function ConfirmRemove({
       <button
         ref={removeRef}
         type="button"
-        className="btn-quiet"
+        className={primary ? "btn-primary" : "btn-quiet"}
         aria-label={`${label} ${what}`}
         onClick={() => {
           setMoved(true);
@@ -80,13 +87,14 @@ export function ConfirmRemove({
       </button>
     );
   }
+  const forRemoval = asks ?? label === "Remove";
   return (
     <form action={action} className="flex flex-wrap items-center gap-2" role="group" aria-label={`Confirm: ${label.toLowerCase()} ${what}`}>
       <span className="text-sm font-medium text-ink">
-        {label} {what}?
+        {forRemoval ? `Ask for ${what} to be removed? Another Manager approves it.` : `${label} ${what}?`}
       </span>
-      <SubmitButton variant="primary" pendingText="Removing…">
-        Yes, {label.toLowerCase()}
+      <SubmitButton variant="primary" pendingText={forRemoval ? "Asking…" : "Saving…"}>
+        {forRemoval ? "Yes, ask" : `Yes, ${label.toLowerCase()}`}
       </SubmitButton>
       <button ref={keepRef} type="button" className="btn-secondary" onClick={() => setAsking(false)}>
         Keep

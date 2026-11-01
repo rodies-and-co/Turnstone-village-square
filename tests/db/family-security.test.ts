@@ -1,6 +1,6 @@
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB, HARTLEY_DB, HUB_ISSUER, USERS, as, asOwner, connect, count, hubClaims, tablesWithRls, type Session } from "./db";
+import { DB, HARTLEY_DB, HUB_ISSUER, USERS, as, asOwner, connect, count, hubClaims, tablesWithRls, type Session, removeWithApproval } from "./db";
 
 let hub: Client;
 let hartley: Client;
@@ -93,11 +93,15 @@ describe("family database: roles", () => {
     });
   });
 
-  it("a Manager can remove people and manage access grants", async () => {
+  it("a person is removed only when one person asks and another Manager approves; Managers manage access grants", async () => {
     const s = await signedIn(USERS.hartleyManager);
     await as(hartley, s, async (db) => {
-      await db.query("delete from beneficiaries"); // a beneficiary can't be removed from the Tree
-      expect((await db.query("delete from people where id = $1", [HARTLEY_DB.southPerson])).rowCount).toBe(1);
+      expect((await db.query("delete from people where id = $1", [HARTLEY_DB.southPerson])).rowCount).toBe(0);
+      // A beneficiary can't be removed from the Tree, so that goes first.
+      const b = (await db.query("select id from beneficiaries where person_id = $1", [HARTLEY_DB.southPerson])).rows[0].id;
+      expect(await removeWithApproval(db, hub, "beneficiaries", b)).toBe("approved");
+      expect(await removeWithApproval(db, hub, "people", HARTLEY_DB.southPerson)).toBe("approved");
+      expect(await count(db, `select * from people where id = '${HARTLEY_DB.southPerson}'`)).toBe(0);
       await db.query("insert into access_grants (user_id, scope) values ($1, 'whole_family')", [USERS.nobody]);
     });
   });

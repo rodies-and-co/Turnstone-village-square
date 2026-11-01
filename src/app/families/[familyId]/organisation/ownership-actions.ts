@@ -7,11 +7,12 @@ import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
 import { INTERESTS, TRANSACTION_KINDS, holderColumns } from "@/lib/ownership";
 import { friendlyError } from "@/lib/people";
+import { askToRemove } from "@/lib/removal";
 
 // Ownership: share classes and transactions for companies and LLCs;
 // settlements, beneficiaries and classes for trusts and foundations.
 // Managers and Administrators record; a Manager who didn't prepare a share
-// transaction approves it; only Managers remove. The family database checks
+// transaction approves it; removing takes two people (see src/lib/removal.ts). The family database checks
 // all of this too.
 
 const ORG_KINDS = ["trust_company", "registered_agent", "corporate_services", "management_company", "law_firm", "accounting_firm", "bank", "company", "other"];
@@ -125,9 +126,9 @@ export async function addShareClass(familyId: string, entityId: string, form: Fo
 }
 
 export async function removeShareClass(familyId: string, entityId: string, classId: string) {
-  const ctx = await manager(familyId, entityId, "remove a share class");
-  const { error } = await ctx.db!.from("share_classes").delete().eq("id", classId).eq("entity_id", entityId);
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "removed");
+  const ctx = await getFamilyContext(familyId);
+  const error = await askToRemove(ctx, "share_classes", classId, { entity_id: entityId });
+  go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
 export async function recordShareTransaction(familyId: string, entityId: string, form: FormData) {
@@ -189,10 +190,9 @@ export async function approveShareTransaction(familyId: string, entityId: string
 }
 
 export async function removeShareTransaction(familyId: string, entityId: string, transactionId: string) {
-  const ctx = await manager(familyId, entityId, "remove a draft transaction");
-  const { data, error } = await ctx.db!.from("share_transactions").delete().eq("id", transactionId).eq("entity_id", entityId).eq("status", "draft").select("id");
-  if (!error && !data?.length) go(back(familyId, entityId), "Only a draft can be removed. An approved transaction is put right by recording another one.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "removed");
+  const ctx = await getFamilyContext(familyId);
+  const error = await askToRemove(ctx, "share_transactions", transactionId, { entity_id: entityId });
+  go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
 // ---------------------------------------------------------------------------
@@ -225,10 +225,9 @@ export async function addSettlement(familyId: string, entityId: string, form: Fo
 }
 
 export async function removeSettlement(familyId: string, entityId: string, id: string) {
-  const ctx = await manager(familyId, entityId, "remove a settlement");
-  const { data, error } = await ctx.db!.from("settlements").delete().eq("id", id).eq("entity_id", entityId).select("id");
-  if (!error && !data?.length) go(back(familyId, entityId), "Nothing was removed: it may already have gone. Please look again.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "removed");
+  const ctx = await getFamilyContext(familyId);
+  const error = await askToRemove(ctx, "settlements", id, { entity_id: entityId });
+  go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
 export async function addBeneficiary(familyId: string, entityId: string, form: FormData) {
@@ -268,10 +267,9 @@ export async function endBeneficiary(familyId: string, entityId: string, id: str
 }
 
 export async function removeBeneficiary(familyId: string, entityId: string, id: string) {
-  const ctx = await manager(familyId, entityId, "remove a beneficiary from the history");
-  const { data, error } = await ctx.db!.from("beneficiaries").delete().eq("id", id).eq("entity_id", entityId).select("id");
-  if (!error && !data?.length) go(back(familyId, entityId), "Nothing was removed: it may already have gone. Please look again.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "removed");
+  const ctx = await getFamilyContext(familyId);
+  const error = await askToRemove(ctx, "beneficiaries", id, { entity_id: entityId });
+  go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
 export async function addBeneficiaryClass(familyId: string, entityId: string, form: FormData) {
@@ -284,10 +282,9 @@ export async function addBeneficiaryClass(familyId: string, entityId: string, fo
 }
 
 export async function removeBeneficiaryClass(familyId: string, entityId: string, id: string) {
-  const ctx = await manager(familyId, entityId, "remove a class of beneficiaries");
-  const { data, error } = await ctx.db!.from("beneficiary_classes").delete().eq("id", id).eq("entity_id", entityId).select("id");
-  if (!error && !data?.length) go(back(familyId, entityId), "Nothing was removed: it may already have gone. Please look again.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "removed");
+  const ctx = await getFamilyContext(familyId);
+  const error = await askToRemove(ctx, "beneficiary_classes", id, { entity_id: entityId });
+  go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
 export async function addClassMember(familyId: string, entityId: string, classId: string, form: FormData) {

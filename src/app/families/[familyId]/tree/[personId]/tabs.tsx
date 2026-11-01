@@ -134,15 +134,15 @@ export async function OverviewTab({ ctx, familyId, personId, person }: Props) {
         </Card>
       )}
 
-      {ctx.canManage && (
+      {ctx.canEdit && (
         <Card title="Remove from the Tree">
           <Fold label={`Remove ${firstName(person)} from the Tree`} danger>
             <p className="text-sm text-ink-2">
               This removes {firstName(person)} with their personal details, addresses, documents and family links. The change is
-              recorded in the history. It can&apos;t be undone from here.
+              recorded in the history. It is removed only once another Manager approves the request on the family Overview.
             </p>
             <form action={removePerson.bind(null, familyId, personId)} className="mt-3">
-              <SubmitButton pendingText="Removing…">Yes, remove {firstName(person)}</SubmitButton>
+              <SubmitButton pendingText="Asking…">Ask to remove {firstName(person)}</SubmitButton>
             </form>
           </Fold>
         </Card>
@@ -225,7 +225,7 @@ export async function IdentityTab({ ctx, familyId, personId, person }: Props) {
             <Rows>
               {(passports ?? []).map((p: { id: string; country: string; number: string; expires_on: string | null }) => (
                 <Row key={p.id} title={`${p.country} · ${p.number}`} meta={p.expires_on ? `Expires ${formatDate(p.expires_on)}` : "Expiry not recorded"}>
-                  {ctx.canManage && <RemoveButton action={removePassport.bind(null, familyId, personId, p.id)} what={`passport ${p.number}`} />}
+                  {ctx.canEdit && <RemoveButton action={removePassport.bind(null, familyId, personId, p.id)} what={`passport ${p.number}`} />}
                 </Row>
               ))}
             </Rows>
@@ -277,7 +277,7 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
                 const a = Array.isArray(l.addresses) ? l.addresses[0] : l.addresses;
                 return (
                   <Row key={l.id} title={a ? formatAddress(a) : "—"} meta={label(ADDRESS_KINDS, l.kind)}>
-                    {ctx.canManage && <RemoveButton action={removePersonAddress.bind(null, familyId, personId, l.id)} what="this address" />}
+                    {ctx.canEdit && <RemoveButton action={removePersonAddress.bind(null, familyId, personId, l.id)} what="this address" />}
                   </Row>
                 );
               })}
@@ -317,7 +317,7 @@ export async function AddressesTab({ ctx, familyId, personId }: Props) {
             <Row title={details?.email ?? "No email recorded"} meta="Email" />
             {(phones ?? []).map((p: { id: string; label: string; number: string }) => (
               <Row key={p.id} title={p.number} meta={p.label}>
-                {ctx.canManage && <RemoveButton action={removePhone.bind(null, familyId, personId, p.id)} what={`phone ${p.number}`} />}
+                {ctx.canEdit && <RemoveButton action={removePhone.bind(null, familyId, personId, p.id)} what={`phone ${p.number}`} />}
               </Row>
             ))}
           </Rows>
@@ -441,7 +441,7 @@ export async function RelationshipsTab({ ctx, familyId, personId, person, everyo
                   }
                   meta={`${label(PARTNERSHIP_KINDS, l.kind)} · ${when}`}
                 >
-                  {ctx.canManage && (
+                  {ctx.canEdit && (
                     <RemoveButton action={removePartnership.bind(null, familyId, personId, l.id)} what={`the partnership with ${name(other)}`} />
                   )}
                 </Row>
@@ -462,7 +462,7 @@ export async function RelationshipsTab({ ctx, familyId, personId, person, everyo
               <Rows>
                 {parents.map((l) => (
                   <Row key={l.id} title={personLink(l.parent_id)} meta={[`${kindOf(l.kind)} parent`, life(l.parent_id)].filter(Boolean).join(" · ")}>
-                    {ctx.canManage && (
+                    {ctx.canEdit && (
                       <RemoveButton action={removeParentLink.bind(null, familyId, personId, l.id)} what={`the link to ${name(l.parent_id)}`} />
                     )}
                   </Row>
@@ -479,7 +479,7 @@ export async function RelationshipsTab({ ctx, familyId, personId, person, everyo
               <Rows>
                 {children.map((l) => (
                   <Row key={l.id} title={personLink(l.child_id)} meta={[`${kindOf(l.kind)} child`, life(l.child_id)].filter(Boolean).join(" · ")}>
-                    {ctx.canManage && (
+                    {ctx.canEdit && (
                       <RemoveButton action={removeParentLink.bind(null, familyId, personId, l.id)} what={`the link to ${name(l.child_id)}`} />
                     )}
                   </Row>
@@ -531,7 +531,7 @@ export async function FinancesTab({ ctx, familyId, personId }: Props) {
             <Rows>
               {(taxNumbers ?? []).map((t: { id: string; country: string; number: string }) => (
                 <Row key={t.id} title={t.number} meta={t.country}>
-                  {ctx.canManage && <RemoveButton action={removeTaxNumber.bind(null, familyId, personId, t.id)} what={`tax number ${t.number}`} />}
+                  {ctx.canEdit && <RemoveButton action={removeTaxNumber.bind(null, familyId, personId, t.id)} what={`tax number ${t.number}`} />}
                 </Row>
               ))}
             </Rows>

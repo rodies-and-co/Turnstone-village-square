@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { getFamilyContext } from "@/lib/family-context";
 import { BODY_KINDS, MEMBER_ROLES, PROFESSIONS, STATEMENT_KINDS, governanceError, isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
+import { askToRemove } from "@/lib/removal";
 
 // Governance bodies, advisors, and purpose and values. Managers and
-// Administrators add and change; only Managers remove and adopt. The family
+// Administrators add and change; only Managers adopt, and removing takes two people. The family
 // database checks all of this too; these checks only give a clear message.
 
 type Page = "governance" | "advisors" | "values";
@@ -85,9 +86,9 @@ export async function saveBody(familyId: string, bodyId: string, form: FormData)
 
 export async function removeBody(familyId: string, bodyId: string) {
   const page = "governance";
-  const d = await db(familyId, page, true);
-  const { error } = await d.from("governance_bodies").delete().eq("id", bodyId);
-  back(familyId, page, error ? governanceError(error.message) : undefined, "body_removed");
+  await db(familyId, page);
+  const error = await askToRemove(await getFamilyContext(familyId), "governance_bodies", bodyId);
+  back(familyId, page, error ?? undefined, "removal_requested");
 }
 
 export async function addSeat(familyId: string, bodyId: string, form: FormData) {
@@ -114,9 +115,9 @@ export async function endSeat(familyId: string, seatId: string) {
 
 export async function removeSeat(familyId: string, seatId: string) {
   const page = "governance";
-  const d = await db(familyId, page, true);
-  const { error } = await d.from("body_members").delete().eq("id", seatId);
-  back(familyId, page, error ? governanceError(error.message) : undefined, "seat_removed");
+  await db(familyId, page);
+  const error = await askToRemove(await getFamilyContext(familyId), "body_members", seatId);
+  back(familyId, page, error ?? undefined, "removal_requested");
 }
 
 // ---------------------------------------------------------------------------
@@ -166,16 +167,16 @@ export async function saveAdvisor(familyId: string, advisorId: string, form: For
 
 export async function removeAdvisorRole(familyId: string, roleId: string) {
   const page = "advisors";
-  const d = await db(familyId, page, true);
-  const { error } = await d.from("advisor_roles").delete().eq("id", roleId);
-  back(familyId, page, error ? governanceError(error.message) : undefined, "advisor_role_removed");
+  await db(familyId, page);
+  const error = await askToRemove(await getFamilyContext(familyId), "advisor_roles", roleId);
+  back(familyId, page, error ?? undefined, "removal_requested");
 }
 
 export async function removeAdvisor(familyId: string, advisorId: string) {
   const page = "advisors";
-  const d = await db(familyId, page, true);
-  const { error } = await d.from("advisors").delete().eq("id", advisorId);
-  back(familyId, page, error ? governanceError(error.message) : undefined, "advisor_removed");
+  await db(familyId, page);
+  const error = await askToRemove(await getFamilyContext(familyId), "advisors", advisorId);
+  back(familyId, page, error ?? undefined, "removal_requested");
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +220,7 @@ export async function withdrawStatement(familyId: string, statementId: string) {
 
 export async function removeStatement(familyId: string, statementId: string) {
   const page = "values";
-  const d = await db(familyId, page, true);
-  const { error } = await d.from("family_statements").delete().eq("id", statementId);
-  back(familyId, page, error ? governanceError(error.message) : undefined, "statement_removed");
+  await db(familyId, page);
+  const error = await askToRemove(await getFamilyContext(familyId), "family_statements", statementId);
+  back(familyId, page, error ?? undefined, "removal_requested");
 }

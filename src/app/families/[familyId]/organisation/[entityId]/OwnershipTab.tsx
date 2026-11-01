@@ -251,7 +251,7 @@ export async function OwnershipTab({
                       r.shareClass.limited ? `${formatShares(r.issued)} issued of ${formatShares(r.authorised)} authorised` : `${formatShares(r.issued)} issued (no limit)`,
                     ].join(" · ")}
                   >
-                    {ctx.canManage && <ConfirmRemove action={removeShareClass.bind(null, familyId, entity.id, r.shareClass.id)} what={`the ${r.shareClass.name} class`} />}
+                    {ctx.canEdit && <ConfirmRemove action={removeShareClass.bind(null, familyId, entity.id, r.shareClass.id)} what={`the ${r.shareClass.name} class`} />}
                   </Row>
                 ))}
               </Rows>
@@ -297,7 +297,7 @@ export async function OwnershipTab({
                       {ctx.canEdit && (t.prepared_by === me || t.edited_by.includes(me ?? "")) && (
                         <p className="text-sm text-ink-3">You recorded or changed this, so another Manager approves it.</p>
                       )}
-                      {ctx.canManage && <ConfirmRemove action={removeShareTransaction.bind(null, familyId, entity.id, t.id)} what="this draft transaction" />}
+                      {ctx.canEdit && <ConfirmRemove action={removeShareTransaction.bind(null, familyId, entity.id, t.id)} what="this draft transaction" />}
                     </div>
                   </li>
                 ))}
@@ -407,7 +407,7 @@ export async function OwnershipTab({
                       .filter(Boolean)
                       .join(" · ")}
                   >
-                    {ctx.canManage && <ConfirmRemove action={removeSettlement.bind(null, familyId, entity.id, String(s.id))} what="this settlement" />}
+                    {ctx.canEdit && <ConfirmRemove action={removeSettlement.bind(null, familyId, entity.id, String(s.id))} what="this settlement" />}
                   </Row>
                 ))}
               </Rows>
@@ -450,7 +450,7 @@ export async function OwnershipTab({
                     .filter((b) => b.ceased_on)
                     .map((b) => (
                       <Row key={String(b.id)} title={b.cause ? String(b.cause) : link(holderFrom(b))} meta={`Until ${formatDate(b.ceased_on as string)}`}>
-                        {ctx.canManage && <ConfirmRemove action={removeBeneficiary.bind(null, familyId, entity.id, String(b.id))} what="this past beneficiary" />}
+                        {ctx.canEdit && <ConfirmRemove action={removeBeneficiary.bind(null, familyId, entity.id, String(b.id))} what="this past beneficiary" />}
                       </Row>
                     ))}
                 </Rows>
@@ -474,7 +474,7 @@ export async function OwnershipTab({
                     <div key={c.id} className="border-t border-border pt-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <h3 className="font-semibold text-ink">{c.name}</h3>
-                        {ctx.canManage && <ConfirmRemove action={removeBeneficiaryClass.bind(null, familyId, entity.id, c.id)} what={`the class ${c.name}`} />}
+                        {ctx.canEdit && <ConfirmRemove action={removeBeneficiaryClass.bind(null, familyId, entity.id, c.id)} what={`the class ${c.name}`} />}
                       </div>
                       {c.description && <p className="text-sm text-ink-2">{c.description}</p>}
                       {members.length === 0 ? (

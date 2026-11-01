@@ -80,7 +80,7 @@ export default async function ValuesPage({
         {ctx.canManage && s.status === "adopted" && (
           <ConfirmRemove action={withdrawStatement.bind(null, familyId, s.id)} what={`the adoption of “${s.title}”`} label="Withdraw" />
         )}
-        {ctx.canManage && <ConfirmRemove action={removeStatement.bind(null, familyId, s.id)} what={`“${s.title}”`} />}
+        {ctx.canEdit && <ConfirmRemove action={removeStatement.bind(null, familyId, s.id)} what={`“${s.title}”`} />}
       </div>
     </article>
   );

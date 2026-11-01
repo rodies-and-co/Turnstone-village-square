@@ -47,12 +47,21 @@ These rules are permanent. Follow them in every change.
 - Super User: everything, in every family (with two-factor).
 - System Admin: users, access and settings in the hub; no family records, and
   cannot give themselves a family role.
-- Manager: reads, adds, changes, approves and removes in their families; manages
+- Manager: reads, adds, changes and approves (including other people's removal
+  requests) in their families; manages
   Administrators and Viewers for their families.
-- Administrator: reads, adds and changes; cannot approve, delete or manage access.
+- Administrator: reads, adds and changes, and may ask for a removal; cannot
+  approve, remove or manage access.
 - Viewer: read only, limited by access grants (whole family, a branch, or own
   record). Family members and advisers are Viewers.
 - Whoever prepares a record must not be the one who approves it.
+- Nothing is removed by one person alone. A Manager or Administrator asks
+  (`request_removal`); a Manager or the Super User who didn't ask approves
+  (`decide_removal`), and only then is the record removed. A copy is kept with
+  the request. There are no direct delete rules on family tables. The one
+  exception is taking away access (a Viewer's grant, or hub access), which
+  stays immediate. In the hub, removals are approved by the Super User or
+  System Admin; the System Admin still sees no family records.
 
 ## Security first
 

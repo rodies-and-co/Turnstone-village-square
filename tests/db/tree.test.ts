@@ -1,6 +1,6 @@
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB, HARTLEY_DB, USERS, as, asOwner, connect, count, hubClaims, type Session } from "./db";
+import { DB, HARTLEY_DB, USERS, as, asOwner, connect, count, hubClaims, type Session, removeWithApproval } from "./db";
 
 let hub: Client;
 let hartley: Client;
@@ -115,10 +115,13 @@ describe("the Tree: who can change what", () => {
     });
   });
 
-  it("Managers can remove details", async () => {
+  it("details are removed only when one person asks and another Manager approves", async () => {
     const s = await signedIn(USERS.hartleyManager);
     await as(hartley, s, async (db) => {
-      expect((await db.query("delete from passports where number = 'TEST1001'")).rowCount).toBe(1);
+      expect((await db.query("delete from passports where number = 'TEST1001'")).rowCount).toBe(0);
+      const id = (await db.query("select id from passports where number = 'TEST1001'")).rows[0].id;
+      expect(await removeWithApproval(db, hub, "passports", id)).toBe("approved");
+      expect(await count(db, "select * from passports where number = 'TEST1001'")).toBe(0);
     });
   });
 

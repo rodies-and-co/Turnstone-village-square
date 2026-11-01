@@ -118,7 +118,7 @@ export default async function AdvisorsPage({
                   title={a ? `${a.full_name}${a.firm ? `, ${a.firm}` : ""}` : "Advisor"}
                   meta={[a ? PROFESSIONS[a.profession] : null, r.advises_on, r.from_date ? `Since ${formatDate(r.from_date)}` : null].filter(Boolean).join(" · ")}
                 >
-                  {ctx.canManage && <ConfirmRemove action={removeAdvisorRole.bind(null, familyId, r.id)} what={`${a?.full_name ?? "this advisor"} from this circle`} label="Take out" />}
+                  {ctx.canEdit && <ConfirmRemove action={removeAdvisorRole.bind(null, familyId, r.id)} what={`${a?.full_name ?? "this advisor"} from this circle`} label="Take out" asks />}
                 </Row>
               );
             })}
@@ -154,7 +154,7 @@ export default async function AdvisorsPage({
                     </div>
                     <div className="text-sm text-ink-3">{[PROFESSIONS[a.profession], a.email, a.phone].filter(Boolean).join(" · ")}</div>
                   </div>
-                  {ctx.canManage && <ConfirmRemove action={removeAdvisor.bind(null, familyId, a.id)} what={`${a.full_name} and every circle they are in`} />}
+                  {ctx.canEdit && <ConfirmRemove action={removeAdvisor.bind(null, familyId, a.id)} what={`${a.full_name} and every circle they are in`} />}
                 </div>
                 {ctx.canEdit && (
                   <Fold label="Change the details">

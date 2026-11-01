@@ -1,6 +1,6 @@
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB, USERS, as, connect, count, hubClaims, type Session } from "./db";
+import { DB, USERS, as, connect, count, hubClaims, type Session, removeWithApproval } from "./db";
 
 let hub: Client;
 let hartley: Client;
@@ -84,9 +84,11 @@ describe("the Organisation: who changes what", () => {
     expect(await as(hartley, v, async (db) => (await db.query("update entities set activity = 'x'")).rowCount)).toBe(0);
   });
 
-  it("Managers can remove", async () => {
+  it("an entity is removed only when one person asks and another Manager approves", async () => {
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
-      expect((await db.query("delete from entities where id = $1", [NORTH_TRUST])).rowCount).toBe(1);
+      expect((await db.query("delete from entities where id = $1", [NORTH_TRUST])).rowCount).toBe(0);
+      expect(await removeWithApproval(db, hub, "entities", NORTH_TRUST)).toBe("approved");
+      expect(await count(db, "select * from entities where id = '" + NORTH_TRUST + "'")).toBe(0);
       // Its appointments go with it.
       expect(await count(db, "select * from appointments where entity_id = '" + NORTH_TRUST + "'")).toBe(0);
     });

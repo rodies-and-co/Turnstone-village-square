@@ -1,6 +1,6 @@
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB, USERS, as, connect, count, hubClaims, type Session } from "./db";
+import { DB, USERS, as, connect, count, hubClaims, type Session, removeWithApproval } from "./db";
 
 let hub: Client;
 let hartley: Client;
@@ -138,11 +138,10 @@ describe("Ownership: share transactions are prepared by one person and approved 
   it("approved transactions can't be changed or removed; drafts can be removed by a Manager", async () => {
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
       await refused(db, "update share_transactions set shares = 1 where id = 'ab000000-0000-4000-8000-000000000002'", [], /can't be changed/);
-      expect((await db.query("delete from share_transactions where status = 'approved'")).rowCount).toBe(0);
-      expect((await db.query("delete from share_transactions where id = $1", [DRAFT_ISSUE])).rowCount).toBe(1);
-    });
-    await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
-      expect((await db.query("delete from share_transactions where id = $1", [DRAFT_ISSUE])).rowCount).toBe(0);
+      expect((await db.query("delete from share_transactions")).rowCount).toBe(0);
+      await refused(db, "select public.request_removal('share_transactions', 'ab000000-0000-4000-8000-000000000002')", [], /approved share transaction/);
+      expect(await removeWithApproval(db, hub, "share_transactions", DRAFT_ISSUE)).toBe("approved");
+      expect(await count(db, `select * from share_transactions where id = '${DRAFT_ISSUE}'`)).toBe(0);
     });
   });
 
@@ -239,15 +238,14 @@ describe("Ownership: keeping records sound", () => {
       await db.query("savepoint a");
       await expect(db.query("update share_classes set par_value = 2 where id = $1", [ORDINARY])).rejects.toThrow(/can't change/);
       await db.query("rollback to savepoint a");
-      await expect(db.query("delete from share_classes where id = $1", [ORDINARY])).rejects.toThrow(/can't be removed/);
+      await expect(removeWithApproval(db, hub, "share_classes", ORDINARY)).rejects.toThrow(/kept as a record/);
     });
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
       await expect(db.query("update share_classes set limited = false where id = $1", [ORDINARY])).rejects.toThrow(/can't change/);
     });
-    // Removing the whole entity takes its share records with it.
+    // Nor can the entity: its approved share register is kept. It is marked as dissolved instead.
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
-      expect((await db.query("delete from entities where id = $1", [HOLDINGS])).rowCount).toBe(1);
-      expect(await count(db, "select * from share_transactions")).toBe(0);
+      await expect(removeWithApproval(db, hub, "entities", HOLDINGS)).rejects.toThrow(/Mark it as dissolved/);
     });
   });
 
@@ -258,7 +256,7 @@ describe("Ownership: keeping records sound", () => {
         ORDINARY,
         NORTH_TRUST,
       ]);
-      await expect(db.query("delete from entities where id = $1", [NORTH_TRUST])).rejects.toThrow(/foreign key/);
+      await expect(removeWithApproval(db, hub, "entities", NORTH_TRUST)).rejects.toThrow(/foreign key/);
     });
   });
 
@@ -304,7 +302,7 @@ describe("Ownership: keeping records sound", () => {
 
   it("a beneficiary or class member can't be removed from the Tree while they are one", async () => {
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
-      await expect(db.query("delete from people where id = $1", [SOUTH])).rejects.toThrow(/foreign key/);
+      await expect(removeWithApproval(db, hub, "people", SOUTH)).rejects.toThrow(/foreign key/);
     });
   });
 

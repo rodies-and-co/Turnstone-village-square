@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { AppShell, PageTitle } from "@/components/AppShell";
+import { Toast } from "@/components/feedback";
 import { Card } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
+import { errorMessage, savedMessage } from "@/lib/messages";
+import { RemovalRequests } from "./RemovalRequests";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +18,15 @@ const LATER = [
   ["Investments", "Portfolios, properties and rentals (built last)"],
 ];
 
-export default async function FamilyPage({ params }: { params: Promise<{ familyId: string }> }) {
+export default async function FamilyPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ familyId: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
+}) {
   const { familyId } = await params;
+  const sp = await searchParams;
   const ctx = await getFamilyContext(familyId);
   const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
 
@@ -50,6 +60,8 @@ export default async function FamilyPage({ params }: { params: Promise<{ familyI
       crumbs={[["My families", "/"], [familyName]]}
       user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
     >
+      {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
+      {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
       <PageTitle eyebrow="Family overview" title={familyName} subtitle={ctx.roleLabel ? `You are ${/^[aeiou]/i.test(ctx.roleLabel) ? "an" : "a"} ${ctx.roleLabel} in this family.` : undefined} />
       {status !== "ok" ? (
         <p role="alert" className="alert">
@@ -60,6 +72,9 @@ export default async function FamilyPage({ params }: { params: Promise<{ familyI
               : "The family database did not recognise you. If you were just given access, sign out and in again. If it keeps happening, ask the Turnstone team to check the setup."}
         </p>
       ) : (
+        <div className="space-y-6">
+        {sp.error && <p className="alert">Not done: {errorMessage(sp.error)}</p>}
+        <RemovalRequests ctx={ctx} familyId={familyId} />
         <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
           <Card
             title="The Tree"
@@ -102,6 +117,7 @@ export default async function FamilyPage({ params }: { params: Promise<{ familyI
               ))}
             </dl>
           </Card>
+        </div>
         </div>
       )}
     </AppShell>

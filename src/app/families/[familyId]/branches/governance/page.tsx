@@ -131,11 +131,11 @@ export default async function GovernancePage({
                     <SubmitButton>Save changes</SubmitButton>
                   </form>
                 </Fold>
-                {ctx.canManage && (
+                {ctx.canEdit && (
                   <Fold label="Remove this body" danger>
-                    <p className="text-sm text-ink-2">This removes {body.name} and its list of members. The change is recorded in the history.</p>
+                    <p className="text-sm text-ink-2">This removes {body.name} and its list of members. The change is recorded in the history. It is removed only once another Manager approves the request on the family Overview.</p>
                     <form action={removeBody.bind(null, familyId, body.id)} className="mt-3">
-                      <SubmitButton pendingText="Removing…">Yes, remove {body.name}</SubmitButton>
+                      <SubmitButton pendingText="Asking…">Ask to remove {body.name}</SubmitButton>
                     </form>
                   </Fold>
                 )}
@@ -151,7 +151,7 @@ export default async function GovernancePage({
                       title={name(s.person_id)}
                       meta={[MEMBER_ROLES[s.role], [formatDate(s.from_date), formatDate(s.to_date)].filter(Boolean).join(" to ")].filter(Boolean).join(" · ")}
                     >
-                      {ctx.canManage && <ConfirmRemove action={removeSeat.bind(null, familyId, s.id)} what={`${name(s.person_id)}'s past seat`} />}
+                      {ctx.canEdit && <ConfirmRemove action={removeSeat.bind(null, familyId, s.id)} what={`${name(s.person_id)}'s past seat`} />}
                     </Row>
                   ))}
                 </Rows>

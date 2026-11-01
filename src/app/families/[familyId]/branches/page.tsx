@@ -277,10 +277,10 @@ export default async function BranchesPage({
                   <Fold label="Remove the branch" danger>
                     <p className="text-sm text-ink-2">
                       Its {members.length} {members.length === 1 ? "member stays" : "members stay"} in the Tree without a branch. Viewers whose access is
-                      limited to this branch lose that access. The change is recorded in the history.
+                      limited to this branch lose that access. The change is recorded in the history. It is removed only once another Manager approves the request on the family Overview.
                     </p>
                     <form action={removeBranch.bind(null, familyId, b.id)} className="mt-3">
-                      <SubmitButton pendingText="Removing…">Yes, remove {b.name}</SubmitButton>
+                      <SubmitButton pendingText="Asking…">Ask to remove {b.name}</SubmitButton>
                     </form>
                   </Fold>
                 </div>

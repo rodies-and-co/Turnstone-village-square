@@ -297,12 +297,12 @@ export default async function EntityPage({
               )}
             </Card>
 
-            {ctx.canManage && (
+            {ctx.canEdit && (
               <Card title="Remove this entity">
                 <Fold label={`Remove ${entity.name}`} danger>
-                  <p className="text-sm text-ink-2">This removes the entity and its appointments. The change is recorded in the history.</p>
+                  <p className="text-sm text-ink-2">This removes the entity and its appointments and ownership records. The change is recorded in the history. It is removed only once another Manager approves the request on the family Overview.</p>
                   <form action={removeEntity.bind(null, familyId, entityId)} className="mt-3">
-                    <SubmitButton pendingText="Removing…">Yes, remove {entity.name}</SubmitButton>
+                    <SubmitButton pendingText="Asking…">Ask to remove {entity.name}</SubmitButton>
                   </form>
                 </Fold>
               </Card>
@@ -357,7 +357,7 @@ export default async function EntityPage({
                       title={holder(a)}
                       meta={[APPOINTMENT_ROLES[a.role], [formatDate(a.appointed_on), formatDate(a.ceased_on)].filter(Boolean).join(" to ")].join(" · ")}
                     >
-                      {ctx.canManage && <ConfirmRemove action={removeAppointment.bind(null, familyId, entityId, a.id)} what={`this past appointment of ${holderText(a)}`} />}
+                      {ctx.canEdit && <ConfirmRemove action={removeAppointment.bind(null, familyId, entityId, a.id)} what={`this past appointment of ${holderText(a)}`} />}
                     </Row>
                   ))}
                 </Rows>
