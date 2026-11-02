@@ -154,7 +154,7 @@ export function PersonFields({
         hint={
           canChooseBranch
             ? undefined
-            : "Only a Manager can move a person to another branch."
+            : "Only a Manager places a person in a branch, or moves them to another."
         }
       />
       <div className="sm:col-span-2 lg:col-span-3">

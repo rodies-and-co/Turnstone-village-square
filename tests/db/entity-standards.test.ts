@@ -397,3 +397,37 @@ describe("Entity Standards: approving a new version directly", () => {
     });
   });
 });
+
+describe("Removing a director, per Entity Standard", () => {
+  it("each company standard says who may remove a director", async () => {
+    const { Client } = await import("pg");
+    const { DB, dbUrl } = await import("./db");
+    const hub = new Client({ connectionString: dbUrl(DB.hub) });
+    await hub.connect();
+    try {
+      const { rows } = await hub.query(
+        "select jurisdiction, sub_type, director_removal from entity_standards where entity_type = 'company' order by 1, 2",
+      );
+      const rule = (j: string, sub: string) =>
+        rows.find((r) => r.jurisdiction === j && r.sub_type === sub)
+          ?.director_removal;
+      expect(
+        rule("United Kingdom", "Private company limited by shares"),
+      ).toEqual(["members_meeting", "board"]);
+      expect(rule("Mauritius", "Domestic private company")).toEqual([
+        "members_meeting",
+      ]);
+      expect(rule("British Virgin Islands", "BVI Business Company")).toEqual([
+        "members_meeting",
+        "members_written",
+        "board",
+      ]);
+      expect(rule("Isle of Man", "1931 Act company")).toEqual([
+        "members_meeting",
+      ]);
+      expect(rule("South Africa", "Close corporation CC")).toBeNull();
+    } finally {
+      await hub.end();
+    }
+  });
+});

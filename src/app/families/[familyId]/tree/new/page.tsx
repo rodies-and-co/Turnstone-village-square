@@ -57,7 +57,7 @@ export default async function NewPersonPage({
       )}
       <Card title="Details">
         <form action={createPerson.bind(null, familyId)} className="space-y-5">
-          <PersonFields branches={branches ?? []} canChooseBranch />
+          <PersonFields branches={branches ?? []} canChooseBranch={ctx.canManage} />
           <SubmitButton pendingText="Adding…">Add person</SubmitButton>
         </form>
       </Card>

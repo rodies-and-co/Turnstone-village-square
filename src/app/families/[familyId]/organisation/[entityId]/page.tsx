@@ -60,7 +60,9 @@ import {
 import { decisionTargets } from "../../meetings/draft";
 import { EndAppointmentForm } from "./EndAppointmentForm";
 import {
+  BOARD_ROLES,
   QUORUM_RULES,
+  REMOVAL_WAYS,
   boardName,
   hasMembers,
   membersName,
@@ -310,6 +312,13 @@ export default async function EntityPage({
           loadRecords(ctx, { entityId }),
         ])
       : [() => null, [] as [string, string][], [] as [string, string][], null];
+  // Removals of directors (and trustees, council members) only where the
+  // Entity Standard allows.
+  const removalAllow = standard?.director_removal ?? null;
+  const removalTargets =
+    tab === "officers" && ctx.canEdit
+      ? await decisionTargets(ctx, entity, removalAllow)
+      : ([] as [string, string][]);
   // Officer changes drafted into a meeting or resolution that hasn't passed yet.
   const waiting = (records?.decisions ?? []).filter((d) => {
     if (
@@ -774,6 +783,21 @@ export default async function EntityPage({
                             what={`${holderText(a)}'s appointment as ${APPOINTMENT_ROLES[a.role].toLowerCase()}`}
                             since={a.appointed_on}
                             targets={targets}
+                            removalTargets={
+                              BOARD_ROLES.includes(a.role)
+                                ? removalTargets
+                                : targets
+                            }
+                            removalRule={
+                              BOARD_ROLES.includes(a.role) && removalAllow
+                                ? `${removalAllow.map((w) => REMOVAL_WAYS[w]).join("; ")}. ${standard?.director_removal_notes ?? ""}`
+                                : null
+                            }
+                            byInstrument={
+                              !BOARD_ROLES.includes(a.role) ||
+                              !removalAllow ||
+                              removalAllow.includes("instrument")
+                            }
                             idPrefix={`end-${a.id}`}
                           />
                         </Fold>

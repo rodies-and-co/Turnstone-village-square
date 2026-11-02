@@ -78,8 +78,9 @@ These rules are permanent. Follow them in every change.
 - Only a Super User may change where a family's database lives, give anyone a
   role in a family they don't already manage, or give Turnstone staff with a
   system role a family role. Nobody else can change their own access.
-- Moving a person to another branch or linking a person to a login changes
-  what Viewers see, so only Managers may do it.
+- Placing a person in a branch (a new person too), moving them to another
+  branch, or linking a person to a login changes what Viewers see, so only
+  Managers (and the Super User) may do it.
 - Every feature gets tests proving people only see and change what they are
   allowed to, including tests that one family's token gets nothing from
   another family's database.

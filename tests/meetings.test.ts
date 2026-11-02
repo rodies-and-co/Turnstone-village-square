@@ -136,3 +136,13 @@ describe("drafted wording", () => {
     expect(parseTarget("meeting:not-an-id")).toBeNull();
   });
 });
+
+describe("where a removal may be decided", () => {
+  it("maps a meeting or resolution to the way it decides", async () => {
+    const { wayOf } = await import("@/lib/meetings");
+    expect(wayOf("meeting", "members")).toBe("members_meeting");
+    expect(wayOf("resolution", "members")).toBe("members_written");
+    expect(wayOf("resolution", "board")).toBe("board");
+    expect(wayOf("meeting", "governance")).toBeNull();
+  });
+});

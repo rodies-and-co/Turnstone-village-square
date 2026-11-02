@@ -368,3 +368,36 @@ export function dividendWording(o: {
       `${o.paymentDate ? `, payable on ${longDate(o.paymentDate)}` : ""}, to the members on the register ${o.recordDate ? `on ${longDate(o.recordDate)}` : "on the date of this decision"}.`,
   };
 }
+
+// The roles whose removal follows the Entity Standard's "removing a director" rule.
+export const BOARD_ROLES = [
+  "director",
+  "trustee",
+  "council_member",
+  "manager",
+  "general_partner",
+  "designated_member",
+];
+
+export const REMOVAL_WAYS = {
+  members_meeting: "The members, at a meeting",
+  members_written: "The members, by written resolution",
+  board: "The board (or trustees, council)",
+  instrument: "A deed or other instrument (e.g. by the protector)",
+} as const;
+
+// The ways a body may decide something: by meeting or by written resolution,
+// of the board or the members (see the Entity Standard's director_removal).
+export type Way =
+  "members_meeting" | "members_written" | "board" | "instrument";
+export const wayOf = (
+  kind: "meeting" | "resolution",
+  body: string,
+): Way | null =>
+  body === "members"
+    ? kind === "meeting"
+      ? "members_meeting"
+      : "members_written"
+    : body === "board"
+      ? "board"
+      : null;

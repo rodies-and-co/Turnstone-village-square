@@ -51,6 +51,7 @@ export const REQUIREMENT_FIELDS = [
   "identity_verification_required",
   "share_capital",
   "authorised_capital",
+  "director_removal",
   "bo_threshold_percent",
   "bo_rule",
   "bo_change_deadline",

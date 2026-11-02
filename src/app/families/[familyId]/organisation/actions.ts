@@ -12,6 +12,7 @@ import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
 import {
+  BOARD_ROLES,
   appointWording,
   boardName,
   parseBasis,
@@ -19,7 +20,7 @@ import {
   removalWording,
   resignationWording,
 } from "@/lib/meetings";
-import { draftDecision } from "../meetings/draft";
+import { draftDecision, targetAllowed, type Way } from "../meetings/draft";
 import { askToRemove } from "@/lib/removal";
 import { addressMatchKey, friendlyError, parseAddress } from "@/lib/people";
 import { REQUIRED_APPOINTEES } from "@/lib/providers";
@@ -534,6 +535,37 @@ export async function addAppointment(
   go(back, error ? orgError(error.message) : undefined, "appointment_added");
 }
 
+// Who may remove a director (or trustee, council member) under the entity's
+// Entity Standard; null when the standard doesn't say.
+async function removalWays(
+  ctx: Awaited<ReturnType<typeof getFamilyContext>>,
+  entityId: string,
+) {
+  const { data: ent } = await ctx
+    .db!.from("entities")
+    .select("jurisdiction, entity_type, sub_type")
+    .eq("id", entityId)
+    .maybeSingle();
+  if (!ent) return null;
+  const { data: stds } = await ctx.supabase
+    .from("entity_standards")
+    .select(
+      "jurisdiction, entity_type, sub_type, status, version, director_removal",
+    );
+  const st = matchStandard(
+    (stds ?? []) as {
+      jurisdiction: string;
+      entity_type: string;
+      sub_type: string;
+      status: string;
+      version: number;
+      director_removal: Way[] | null;
+    }[],
+    ent,
+  );
+  return st?.director_removal ?? null;
+}
+
 // Ending an appointment keeps it in the history.
 //   - Resigned: it ends on the date of the resignation, and the resignation
 //     is noted in the meeting or written resolution chosen.
@@ -587,6 +619,16 @@ export async function endAppointment(
     APPOINTMENT_ROLES[appt.role as keyof typeof APPOINTMENT_ROLES] ?? "officer";
 
   if (reason === "removed") {
+    // Only the ways the Entity Standard allows (e.g. in the UK, the members
+    // at a meeting; in Mauritius, the shareholders at a meeting).
+    if (BOARD_ROLES.includes(appt.role)) {
+      const allow = await removalWays(ctx, entityId);
+      if (!(await targetAllowed(ctx, entityId, target!, allow)))
+        go(
+          back,
+          "Under the Entity Standard, this removal can't be decided there. Choose one of the meetings or resolutions offered (the form lists only the ones allowed).",
+        );
+    }
     const name = await holderName(ctx, appt);
     const words = removalWording({ name, role: roleName, from: endedOn });
     const made = await draftDecision(ctx, entityId, target!, {

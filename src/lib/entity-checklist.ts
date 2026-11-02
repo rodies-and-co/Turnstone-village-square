@@ -62,6 +62,9 @@ export type Standard = {
   identity_verification_required: boolean;
   share_capital: "required" | "optional" | "none";
   authorised_capital: "required" | "optional" | "none";
+  // Who may remove a director (or trustee, council member); null: not set.
+  director_removal?: ("members_meeting" | "members_written" | "board" | "instrument")[] | null;
+  director_removal_notes?: string | null;
 };
 
 export type ChecklistEntity = {

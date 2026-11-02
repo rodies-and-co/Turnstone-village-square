@@ -15,12 +15,19 @@ export function EndAppointmentForm({
   what,
   since,
   targets,
+  removalTargets,
+  removalRule,
+  byInstrument,
   idPrefix,
 }: {
   action: (form: FormData) => Promise<void>;
   what: string;
   since: string | null;
   targets: [string, string][];
+  // Where a removal may be decided (from the Entity Standard), and the rule in words.
+  removalTargets: [string, string][];
+  removalRule: string | null;
+  byInstrument: boolean;
   idPrefix: string;
 }) {
   const today = new Date().toLocaleDateString("en-CA", {
@@ -100,17 +107,39 @@ export function EndAppointmentForm({
               <option value="" disabled>
                 Choose…
               </option>
-              {targets.map(([v, t]) => (
-                <option key={v} value={v}>
-                  {t}
-                </option>
-              ))}
+              {(reason === "removed" ? removalTargets : targets).map(
+                ([v, t]) => (
+                  <option key={v} value={v}>
+                    {t}
+                  </option>
+                ),
+              )}
             </select>
             <p className="mt-1 text-xs text-ink-3">
               {reason === "resigned"
                 ? "It ends on the date of the resignation. The wording (“The board noted the resignation of …”) is added for you."
-                : "The wording is drafted for you. The appointment ends once the meeting is confirmed or the resolution passes. Check the articles: in many places (the UK, for example) a director is removed by the members at a meeting, not by the board."}
+                : "The wording is drafted for you. The appointment ends once the meeting is confirmed or the resolution passes."}
             </p>
+            {reason === "removed" && removalRule && (
+              <p className="mt-2 text-sm text-ink-2">
+                <strong className="font-medium text-ink">
+                  Who may remove them (Entity Standard):
+                </strong>{" "}
+                {removalRule}
+              </p>
+            )}
+            {reason === "removed" && removalTargets.length === 0 && (
+              <p className="mt-2 text-sm text-ink-2">
+                No meeting or resolution allowed for this removal is open. Plan
+                a meeting of the members under Decisions &amp; file notes first.
+              </p>
+            )}
+            {reason === "removed" && byInstrument && (
+              <p className="mt-2 text-sm text-ink-3">
+                Removed by a deed (e.g. by the protector)? Choose &quot;Another
+                reason&quot; and give the date of the deed.
+              </p>
+            )}
           </div>
         )}
       </div>

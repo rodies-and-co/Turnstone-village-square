@@ -205,11 +205,19 @@ describe("family database: roles", () => {
         ),
       ),
     ).rejects.toThrow(/Only a Manager/);
-    // Placing a new person in a branch is normal data entry.
+    // Nor may they place a new person in a branch (the owner's decision):
+    // they add the person without one, and a Manager places them.
+    await expect(
+      as(hartley, s, (db) =>
+        db.query(
+          "insert into people (member_type, full_names, surname, branch_id) values ('family', 'X', 'Y', $1)",
+          [HARTLEY_DB.northBranch],
+        ),
+      ),
+    ).rejects.toThrow(/Only a Manager can place a person in a branch/);
     await as(hartley, s, (db) =>
       db.query(
-        "insert into people (member_type, full_names, surname, branch_id) values ('family', 'X', 'Y', $1)",
-        [HARTLEY_DB.northBranch],
+        "insert into people (member_type, full_names, surname) values ('family', 'X', 'Y')",
       ),
     );
   });

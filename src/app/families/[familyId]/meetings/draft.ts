@@ -7,6 +7,8 @@ import {
   membersName,
   meetingsError,
   type Target,
+  wayOf,
+  type Way,
 } from "@/lib/meetings";
 
 // Drafting a decision for an officer or share change: the item is added to an
@@ -31,10 +33,16 @@ export type DraftItem = {
 
 // The open meetings and resolutions of this entity's board and members, and
 // new written resolutions, as choices for "Decided by".
+export type { Way };
+
 export async function decisionTargets(
   ctx: FamilyContext,
   entity: { id: string; entity_type: string },
+  // Only these ways (e.g. who may remove a director); everything when not given.
+  allow?: Way[] | null,
 ): Promise<[string, string][]> {
+  const ok = (kind: "meeting" | "resolution", body: string) =>
+    !allow || allow.includes(wayOf(kind, body) as Way);
   const db = ctx.db!;
   const [{ data: m }, { data: r }] = await Promise.all([
     db
@@ -63,25 +71,33 @@ export async function decisionTargets(
         meeting_on: string;
         status: string;
       }[]
-    ).map(
-      (x) =>
-        [
-          `meeting:${x.id}`,
-          `${x.title} of ${formatDate(x.meeting_on)} – ${who(x.body)} (${x.status === "held" ? "held, not yet confirmed" : "planned"})`,
-        ] as [string, string],
-    ),
-    ...((r ?? []) as { id: string; body: string; title: string }[]).map(
-      (x) =>
-        [
-          `resolution:${x.id}`,
-          `Draft written resolution: ${x.title} – ${who(x.body)}`,
-        ] as [string, string],
-    ),
-    [
-      "new_resolution:board",
-      `A new written resolution of the ${boardName(entity.entity_type).toLowerCase()}`,
-    ],
-    ...(hasMembers(entity.entity_type)
+    )
+      .filter((x) => ok("meeting", x.body))
+      .map(
+        (x) =>
+          [
+            `meeting:${x.id}`,
+            `${x.title} of ${formatDate(x.meeting_on)} – ${who(x.body)} (${x.status === "held" ? "held, not yet confirmed" : "planned"})`,
+          ] as [string, string],
+      ),
+    ...((r ?? []) as { id: string; body: string; title: string }[])
+      .filter((x) => ok("resolution", x.body))
+      .map(
+        (x) =>
+          [
+            `resolution:${x.id}`,
+            `Draft written resolution: ${x.title} – ${who(x.body)}`,
+          ] as [string, string],
+      ),
+    ...(ok("resolution", "board")
+      ? ([
+          [
+            "new_resolution:board",
+            `A new written resolution of the ${boardName(entity.entity_type).toLowerCase()}`,
+          ],
+        ] as [string, string][])
+      : []),
+    ...(hasMembers(entity.entity_type) && ok("resolution", "members")
       ? ([
           [
             "new_resolution:members",
@@ -210,4 +226,23 @@ export async function draftDecision(
       ? `/families/${ctx.family.id}/meetings/${parentId}`
       : `/families/${ctx.family.id}/meetings/resolutions/${parentId}`;
   return { decisionId: d.id, href, inMeeting };
+}
+
+// Is this target one of the allowed ways? (Checked again when the removal is drafted.)
+export async function targetAllowed(
+  ctx: FamilyContext,
+  entityId: string,
+  target: Target,
+  allow: Way[] | null,
+): Promise<boolean> {
+  if (!allow) return true;
+  if (target.kind === "new_resolution")
+    return allow.includes(wayOf("resolution", target.body) as Way);
+  const { data } = await ctx
+    .db!.from(target.kind === "meeting" ? "meetings" : "written_resolutions")
+    .select("body")
+    .eq("id", target.id)
+    .eq("entity_id", entityId)
+    .maybeSingle();
+  return Boolean(data && allow.includes(wayOf(target.kind, data.body) as Way));
 }

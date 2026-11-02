@@ -70,7 +70,9 @@ export async function createPerson(familyId: string, form: FormData) {
   const parsed = parsePersonForm(form);
   if (!parsed.ok) redirect(`${back}?error=${encodeURIComponent(parsed.error)}`);
 
-  const branch = text(form, "branch_id") || null;
+  // Only Managers (and the Super User) place a person in a branch: it decides
+  // what Viewers see. An Administrator's new person starts with no branch.
+  const branch = ctx.canManage ? text(form, "branch_id") || null : null;
   const { date_of_birth, ...person } = parsed.value;
   const { data, error } = await ctx.db
     .from("people")
