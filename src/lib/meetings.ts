@@ -360,10 +360,11 @@ export function dividendWording(o: {
 }) {
   const per = `${o.currency} ${o.perShare.toLocaleString("en-GB", { maximumFractionDigits: 6 })}`;
   const k = DIVIDEND_KINDS[o.kind].toLowerCase();
+  const a = k === "interim" ? "an" : "a";
   return {
-    title: `Declaration of a ${k} dividend on the ${o.className} shares`,
+    title: `Declaration of ${a} ${k} dividend on the ${o.className} shares`,
     wording:
-      `That a ${k} dividend of ${per} per ${o.className} share be declared${o.form === "cash" ? "" : o.form === "scrip" ? ", paid in shares" : ", paid in specie"}` +
+      `That ${a} ${k} dividend of ${per} per ${o.className} share be declared${o.form === "cash" ? "" : o.form === "scrip" ? ", paid in shares" : ", paid in specie"}` +
       `${o.paymentDate ? `, payable on ${longDate(o.paymentDate)}` : ""}, to the members on the register ${o.recordDate ? `on ${longDate(o.recordDate)}` : "on the date of this decision"}.`,
   };
 }

@@ -128,6 +128,22 @@ begin
 end;
 $$;
 
+-- Linking a record to a decision counts as changing its meeting or
+-- resolution: whoever does it can't also confirm it.
+create function private.touch_decision_parent(p_decision uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  d public.decisions;
+begin
+  select * into d from public.decisions where id = p_decision;
+  perform private.touch_parent(d.meeting_id, d.resolution_id);
+end;
+$$;
+
 -- May a proposed distribution or dividend be cancelled? Only once its
 -- decision has gone: not carried, withdrawn, lapsed, cancelled or removed.
 create function private.decision_gone(p_decision uuid)
@@ -142,7 +158,7 @@ as $$
     left join public.meetings m on m.id = d.meeting_id
     left join public.written_resolutions w on w.id = d.resolution_id
     where d.id = p_decision
-      and (d.outcome in ('not_carried', 'withdrawn') or m.status = 'cancelled' or w.status = 'lapsed'
+      and (d.outcome in ('not_carried', 'withdrawn') or w.status = 'lapsed'
            or (m.status = 'confirmed' and d.passed_on is null))
   );
 $$;
@@ -182,6 +198,7 @@ begin
       raise exception 'Distributions: it is decided by a decision drafted for it. Choose a meeting or written resolution.';
     end if;
     perform private.check_drafted(new.decision_id, new.entity_id, 'distribution', 'Distributions');
+    perform private.touch_decision_parent(new.decision_id);
     new.created_by := auth.uid();
     new.declared_on := null;
     new.paid_on := null;
@@ -240,6 +257,10 @@ begin
       raise exception 'Dividends: it is decided by a decision drafted for it. Choose a meeting or written resolution.';
     end if;
     perform private.check_drafted(new.decision_id, new.entity_id, 'dividend', 'Dividends');
+    perform private.touch_decision_parent(new.decision_id);
+    if new.record_date is not null and new.record_date > current_date then
+      raise exception 'Dividends: the record date can''t be in the future: the register is taken when the dividend is declared. Leave it empty to use the day it is declared.';
+    end if;
     new.created_by := auth.uid();
     new.declared_on := null;
     return new;
@@ -275,9 +296,13 @@ declare
 begin
   select * into dv from public.dividends where decision_id = p_decision and status = 'proposed';
   if dv.id is null then
-    return;
+    raise exception 'Dividends: the dividend for this decision was cancelled or removed. Record it again, or record the item as not carried.';
   end if;
   rec_date := coalesce(dv.record_date, p_on);
+  if rec_date > p_on then
+    raise exception 'Dividends: the record date (%) is after the decision (%). The register is taken when it is declared, so the record date must be on or before it.',
+      to_char(rec_date, 'DD/MM/YYYY'), to_char(p_on, 'DD/MM/YYYY');
+  end if;
   perform set_config('vs.declaring', 'on', true);
   update public.dividends set status = 'declared', declared_on = p_on, record_date = rec_date where id = dv.id;
   insert into public.dividend_payments (dividend_id, person_id, organisation_id, holder_entity_id, shares, amount)
@@ -293,7 +318,7 @@ begin
            or (t.kind = 'transfer' and t.from_person_id is not distinct from x.p and t.from_organisation_id is not distinct from x.o and t.from_entity_id is not distinct from x.e))
     group by x.p, x.o, x.e
   ) h
-  where h.n > 0;
+  where h.n > 0 and round(h.n * dv.per_share, 2) > 0;
   get diagnostics lines = row_count;
   perform set_config('vs.declaring', 'off', true);
   if lines = 0 then
@@ -321,6 +346,9 @@ begin
   end if;
   if (to_jsonb(new) - array['paid_on', 'voucher']) <> (to_jsonb(old) - array['paid_on', 'voucher']) then
     raise exception 'Dividends: only the date paid and the voucher are recorded.';
+  end if;
+  if old.paid_on is not null then
+    raise exception 'Dividends: a payment already recorded can''t be changed.';
   end if;
   select * into dv from public.dividends where id = new.dividend_id;
   if dv.status not in ('declared', 'paid') then
@@ -512,7 +540,11 @@ begin
   if new.action = 'distribution' then
     perform set_config('vs.declaring', 'on', true);
     update public.distributions set status = 'declared', declared_on = new.passed_on where decision_id = new.id and status = 'proposed';
+    get diagnostics changed = row_count;
     perform set_config('vs.declaring', 'off', true);
+    if changed = 0 then
+      raise exception 'Distributions: the distribution for this decision was cancelled or removed. Record it again, or record the item as not carried.';
+    end if;
   elsif new.action = 'dividend' then
     perform private.declare_dividend(new.id, new.passed_on);
   end if;
@@ -600,8 +632,12 @@ begin
     raise exception 'Removal: a declared distribution or dividend is kept as a record.';
   end if;
   if p_table in ('beneficiaries', 'beneficiary_class_members') and exists (
-       select 1 from public.distributions d where (d.beneficiary_id = p_id or d.class_member_id = p_id) and d.status in ('declared', 'paid')) then
-    raise exception 'Removal: a distribution was made to this beneficiary, which is kept as a record. End it instead.';
+       select 1 from public.distributions d where d.beneficiary_id = p_id or d.class_member_id = p_id) then
+    raise exception 'Removal: a distribution to this beneficiary is on record. End the beneficiary instead.';
+  end if;
+  if p_table in ('people', 'outside_organisations', 'entities') and exists (
+       select 1 from public.dividend_payments x where p_id in (x.person_id, x.organisation_id, x.holder_entity_id)) then
+    raise exception 'Removal: a dividend was paid to them, which is kept as a record.';
   end if;
   if p_table = 'appointments' and exists (select 1 from public.decisions d where d.appointment_id = p_id) then
     raise exception 'Removal: this appointment is named in a minute or written resolution (its removal or resignation), so it is kept.';
@@ -651,5 +687,14 @@ end;
 $$;
 revoke all on function private.removal_allowed(text, uuid, jsonb) from public;
 
-revoke all on function private.check_drafted(uuid, uuid, text, text), private.decision_gone(uuid), private.distribution_rules(),
+-- A distribution's item names the beneficiary: it is hidden from a Viewer
+-- who can't see that beneficiary.
+drop policy "decisions: read" on public.decisions;
+create policy "decisions: read" on public.decisions
+  for select to authenticated using (
+    case when meeting_id is not null then private.can_see_meeting(meeting_id) else private.can_see_resolution(resolution_id) end
+    and (action is distinct from 'distribution' or private.can_edit() or exists (select 1 from public.distributions x where x.decision_id = id))
+  );
+
+revoke all on function private.touch_decision_parent(uuid), private.check_drafted(uuid, uuid, text, text), private.decision_gone(uuid), private.distribution_rules(),
   private.dividend_rules(), private.declare_dividend(uuid, date), private.dividend_payment_rules(), private.dividend_paid() from public;

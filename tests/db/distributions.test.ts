@@ -345,3 +345,134 @@ describe("Dividends", () => {
     });
   });
 });
+
+describe("Review fixes", () => {
+  it("whoever links a distribution to a decision can't also pass it", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const b = (
+        await one(
+          db,
+          "select id from beneficiaries where entity_id = $1 and person_id = $2",
+          [NORTH_TRUST, SOUTH],
+        )
+      ).id;
+      const { w, d } = await drafted(db, NORTH_TRUST, "distribution");
+      await switchUser(db, hub, MANAGER);
+      await db.query(
+        "insert into distributions (entity_id, beneficiary_id, pool, currency, amount, decision_id) values ($1, $2, 'capital', 'ZAR', 9999999, $3)",
+        [NORTH_TRUST, b, d],
+      );
+      await switchUser(db, hub, ADMIN);
+      await db.query(
+        "insert into resolution_signatories (resolution_id, organisation_id) values ($1, $2)",
+        [w, ORG],
+      );
+      await db.query(
+        "update written_resolutions set status = 'circulated', circulated_on = current_date - 2 where id = $1",
+        [w],
+      );
+      await db.query(
+        "update resolution_signatories set signed_on = current_date - 1 where resolution_id = $1",
+        [w],
+      );
+      await switchUser(db, hub, MANAGER);
+      await refused(
+        db,
+        "update written_resolutions set status = 'passed' where id = $1",
+        [w],
+        /can't also confirm/,
+      );
+    });
+  });
+
+  it("a future record date is refused; a paid line is fixed; a cancelled dividend stops its decision taking effect", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const { d } = await drafted(db, HOLDINGS, "dividend");
+      await refused(
+        db,
+        "insert into dividends (entity_id, class_id, per_share, currency, decision_id, record_date) values ($1, $2, 1, 'GBP', $3, current_date + 30)",
+        [HOLDINGS, ORDINARY, d],
+        /can't be in the future/,
+      );
+      const { w, d: d2 } = await drafted(db, HOLDINGS, "dividend");
+      const dv = (
+        await one(
+          db,
+          "insert into dividends (entity_id, class_id, per_share, currency, decision_id) values ($1, $2, 1, 'GBP', $3) returning id",
+          [HOLDINGS, ORDINARY, d2],
+        )
+      ).id;
+      await pass(db, w, [
+        ["person_id", NORTH],
+        ["person_id", SOUTH],
+      ]);
+      await switchUser(db, hub, ADMIN);
+      await db.query(
+        "update dividend_payments set paid_on = current_date where dividend_id = $1 and person_id = $2",
+        [dv, NORTH],
+      );
+      await refused(
+        db,
+        "update dividend_payments set paid_on = null where dividend_id = $1 and person_id = $2",
+        [dv, NORTH],
+        /already recorded/,
+      );
+    });
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const { w, d } = await drafted(db, HOLDINGS, "dividend");
+      const dv = (
+        await one(
+          db,
+          "insert into dividends (entity_id, class_id, per_share, currency, decision_id) values ($1, $2, 1, 'GBP', $3) returning id",
+          [HOLDINGS, ORDINARY, d],
+        )
+      ).id;
+      // Removed (by two people) while the resolution is a draft: passing it then says why nothing happens.
+      expect(await removeWithApproval(db, hub, "dividends", dv)).toBe(
+        "approved",
+      );
+      await switchUser(db, hub, ADMIN);
+      for (const p of [NORTH, SOUTH])
+        await db.query(
+          "insert into resolution_signatories (resolution_id, person_id) values ($1, $2)",
+          [w, p],
+        );
+      await db.query(
+        "update written_resolutions set status = 'circulated', circulated_on = current_date - 2 where id = $1",
+        [w],
+      );
+      await db.query(
+        "update resolution_signatories set signed_on = current_date - 1 where resolution_id = $1",
+        [w],
+      );
+      await switchUser(db, hub, USERS.superUser);
+      await refused(
+        db,
+        "update written_resolutions set status = 'passed' where id = $1",
+        [w],
+        /cancelled or removed/,
+      );
+      void d;
+    });
+  });
+
+  it("a distribution's minute is hidden from a Viewer who can't see the beneficiary", async () => {
+    const seen = await as(hartley, await signedIn(ADMIN), async (db) => {
+      const b = (
+        await one(
+          db,
+          "select id from beneficiaries where entity_id = $1 and person_id = $2",
+          [NORTH_TRUST, SOUTH],
+        )
+      ).id;
+      const { d } = await drafted(db, NORTH_TRUST, "distribution");
+      await db.query(
+        "insert into distributions (entity_id, beneficiary_id, pool, currency, amount, decision_id) values ($1, $2, 'income', 'ZAR', 5, $3)",
+        [NORTH_TRUST, b, d],
+      );
+      await switchUser(db, hub, USERS.hartleyViewerBranch, "aal1");
+      return count(db, "select * from decisions where id = $1", [d]);
+    });
+    expect(seen).toBe(0);
+  });
+});

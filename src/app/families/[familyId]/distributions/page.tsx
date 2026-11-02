@@ -700,10 +700,8 @@ export default async function DistributionsPage({
                                     {l.voucher ?? "—"}
                                   </td>
                                   <td className="py-1.5">
-                                    {ctx.canEdit && (
-                                      <Fold
-                                        label={l.paid_on ? "Change" : "Record"}
-                                      >
+                                    {ctx.canEdit && !l.paid_on && (
+                                      <Fold label="Record">
                                         <form
                                           action={payDividendLine.bind(
                                             null,

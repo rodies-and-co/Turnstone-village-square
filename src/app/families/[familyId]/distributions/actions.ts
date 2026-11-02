@@ -215,6 +215,11 @@ export async function recordDividend(
     );
   if (recordDate && !isDate(recordDate))
     go(to, "Please enter the record date as day, month and year.");
+  if (recordDate && recordDate > today())
+    go(
+      to,
+      "The record date can't be in the future: leave it empty to use the day the dividend is declared.",
+    );
   if (paymentDate && !isDate(paymentDate))
     go(to, "Please enter the payment date as day, month and year.");
   if (!target)
@@ -315,10 +320,11 @@ export async function payDividendLine(
   const to = back.startsWith(`/families/${familyId}/`) ? back : page(familyId);
   const ctx = await editor(familyId, to);
   const paidOn = text(form, "paid_on");
-  if (paidOn && !isDate(paidOn)) go(to, "Please give the date it was paid.");
+  if (!isDate(paidOn)) go(to, "Please give the date it was paid.");
+  if (paidOn > today()) go(to, "The date paid can't be in the future.");
   const { error } = await ctx
     .db!.from("dividend_payments")
-    .update({ paid_on: paidOn || null, voucher: optional(form, "voucher") })
+    .update({ paid_on: paidOn, voucher: optional(form, "voucher") })
     .eq("id", paymentId)
     .eq("dividend_id", dividendId);
   go(to, error ? payoutError(error.message) : undefined, "payout_paid");
@@ -350,6 +356,8 @@ export async function cancelPayout(
   id: string,
 ) {
   const to = back.startsWith(`/families/${familyId}/`) ? back : page(familyId);
+  if (table !== "distributions" && table !== "dividends")
+    go(to, "That isn't possible.");
   const ctx = await editor(familyId, to);
   const { data, error } = await ctx
     .db!.from(table)
@@ -369,6 +377,8 @@ export async function removePayout(
   id: string,
 ) {
   const to = back.startsWith(`/families/${familyId}/`) ? back : page(familyId);
+  if (table !== "distributions" && table !== "dividends")
+    go(to, "That isn't possible.");
   const ctx = await getFamilyContext(familyId);
   const error = await askToRemove(ctx, table, id);
   go(to, error ?? undefined, "removal_requested");
