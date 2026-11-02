@@ -141,11 +141,26 @@ export async function createEntity(familyId: string, form: FormData) {
 
   // The corporate roles its standard requires from the start (e.g. an Isle
   // of Man 2006 Act company's registered agent): checked before anything is saved.
-  const needs = REQUIRED_APPOINTEES.filter((r) => (standard as unknown as Record<string, unknown>)[r.flag]);
+  // (Not for a kind of entity that has only just been given a draft
+  // standard: the form couldn't ask, so they are added afterwards.)
+  const needs = newDraft ? [] : REQUIRED_APPOINTEES.filter((r) => (standard as unknown as Record<string, unknown>)[r.flag]);
   for (const r of needs) {
     const choice = text(form, `appoint_${r.role}`);
-    if (!choice) go(back, `Please choose the ${r.label.toLowerCase()}. It is required for this kind of entity.`);
-    if (choice === "new" && !text(form, `appoint_${r.role}_name`)) go(back, `Please type the new ${r.label.toLowerCase()}'s name.`);
+    const what = r.label.toLowerCase();
+    if (!choice) go(back, `Please choose the ${what}. It is required for this kind of entity.`);
+    if (choice === "new") {
+      const newName = text(form, `appoint_${r.role}_name`);
+      if (!newName) go(back, `Please type the new ${what}'s name.`);
+      const { data: clash } = await ctx.db.from("outside_organisations").select("id").ilike("name", newName.replace(/[%_\\]/g, "\\$&")).limit(1);
+      if (clash?.length) go(back, `There is already a service provider called “${newName}”. Choose it from the list instead.`);
+      if (r.licensed && form.get(`appoint_${r.role}_licensed`) !== "on") go(back, `The ${what} must be licensed: tick “Licensed” for the new provider.`);
+    } else if (choice.startsWith("organisation:")) {
+      const { data: p } = await ctx.db.from("outside_organisations").select("name, licensed").eq("id", choice.slice(13)).maybeSingle();
+      if (!p) go(back, `That ${what} couldn't be found. Please choose again.`);
+      if (r.licensed && !p.licensed) go(back, `${p.name} isn't recorded as licensed. Record its licence on the Service providers page, or choose another.`);
+    } else if (!(choice.startsWith("entity:") && r.allowEntity)) {
+      go(back, `Please choose the ${what} again.`);
+    }
   }
 
   const { data: entity, error } = await ctx.db

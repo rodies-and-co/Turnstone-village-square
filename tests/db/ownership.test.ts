@@ -223,11 +223,12 @@ describe("Ownership: share transactions are prepared by one person and approved 
     });
   });
 
-  it("a certificate number is used once per class", async () => {
+  it("a number typed on a draft is replaced by the next number, so certificates are never reused", async () => {
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
       const dup = await draft(db, "issue", 1, SOUTH, null, "1");
       await become(db, USERS.hartleyManager);
-      await refused(db, APPROVE, [dup], /certificate number/);
+      await db.query(APPROVE, [dup]);
+      expect((await db.query("select certificate_number from share_transactions where id = $1", [dup])).rows[0].certificate_number).toBe("3");
     });
   });
 

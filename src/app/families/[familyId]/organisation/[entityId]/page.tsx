@@ -112,7 +112,12 @@ export default async function EntityPage({
   const entityNames = new Map(((entityRows ?? []) as { id: string; name: string }[]).map((e) => [e.id, e.name]));
   const licensedOrgs = new Set(((orgRows ?? []) as { id: string; licensed: boolean }[]).filter((o) => o.licensed).map((o) => o.id));
   // Whether a holder is licensed is recorded once, on the service provider.
-  const appts = ((apptRows ?? []) as Appointment[]).map((a) => ({ ...a, licensed: Boolean(a.organisation_id && licensedOrgs.has(a.organisation_id)) }));
+  // The family's own entity (e.g. its private trust company) also meets a
+  // "licensed trustee" requirement.
+  const appts = ((apptRows ?? []) as Appointment[]).map((a) => ({
+    ...a,
+    licensed: Boolean((a.organisation_id && licensedOrgs.has(a.organisation_id)) || a.holder_entity_id),
+  }));
   const current = appts.filter((a) => !a.ceased_on);
   const past = appts.filter((a) => a.ceased_on);
   const names = displayNames((peopleRows ?? []) as PersonSummary[]);

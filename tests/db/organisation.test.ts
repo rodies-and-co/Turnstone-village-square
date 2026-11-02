@@ -50,11 +50,11 @@ describe("the Organisation: who sees what", () => {
     });
   });
 
-  it("an own-record Viewer sees no entities", async () => {
+  it("an own-record Viewer sees no entities, and no service providers", async () => {
     expect(await as(hartley, await signedIn(USERS.hartleyViewerOwnRecord, "aal1"), visible)).toEqual({
       entities: 0,
       appointments: 0,
-      outside_organisations: 1,
+      outside_organisations: 0,
     });
   });
 

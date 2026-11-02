@@ -206,3 +206,38 @@ describe("starting a branch happens all at once", () => {
     });
   });
 });
+
+describe("review fixes", () => {
+  it("Viewers see only the service providers serving something they may see", async () => {
+    await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
+      await db.query("insert into outside_organisations (name, kind) values ('Unused Provider Ltd', 'other')");
+      await switchUser(db, hub, USERS.hartleyViewerOwnRecord, "aal1");
+      expect(await count(db, "select * from outside_organisations")).toBe(0);
+      await switchUser(db, hub, USERS.hartleyViewerBranch, "aal1");
+      // The trust company is trustee of the North trust, which this Viewer may see.
+      expect((await db.query("select name from outside_organisations")).rows.map((r) => r.name)).toEqual(["Test Trust Company Ltd"]);
+    });
+  });
+
+  it("an entity or provider with a current appointment can't be removed; once ended, its past appointments go with it", async () => {
+    await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
+      const trust = "a9000000-0000-4000-8000-000000000002";
+      const holdings = "a9000000-0000-4000-8000-000000000001";
+      await db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $2)", [holdings, trust]);
+      await refused(db, ASK, ["entities", trust, null], /still holds a role/);
+      const org = (await db.query("select id from outside_organisations limit 1")).rows[0].id;
+      await refused(db, ASK, ["outside_organisations", org, null], /still holds a current appointment/);
+      await db.query("update appointments set ceased_on = current_date where organisation_id = $1", [org]);
+      const req = (await db.query(ASK, ["outside_organisations", org, null])).rows[0].id;
+      expect((await db.query("select summary from removal_requests where id = $1", [req])).rows[0].summary).toMatch(/linked record/);
+    });
+  });
+
+  it("whether a database is a practice family can't be changed", async () => {
+    await as(hartley, await signedIn(USERS.superUser), async (db) => {
+      await db.query("reset role");
+      expect((await db.query("select is_practice from family_settings")).rows[0].is_practice).toBe(false);
+      await refused(db, "update family_settings set is_practice = true", [], /can't be changed/);
+    });
+  });
+});

@@ -11,8 +11,8 @@
 -- waiting, and the reason is listed. Every approval is in the history, under
 -- the practice approver.
 --
--- Never use this file for a real family: it refuses to run unless the family
--- is Hartley or Visser.
+-- Never use this file for a real family: it refuses to run unless the
+-- database is marked as a practice family (a mark that can't be changed).
 
 do $$
 declare
@@ -25,8 +25,8 @@ declare
   problems text := '';
 begin
   select family_name, family_id, hub_issuer into fam, fid, iss from public.family_settings;
-  if fam is null or fam not in ('Hartley', 'Visser') then
-    raise exception 'This script is only for the practice families Hartley and Visser (this is %).', fam;
+  if not coalesce((select to_jsonb(s)->>'is_practice' from public.family_settings s)::boolean, false) then
+    raise exception 'This script is only for practice families, and % isn''t marked as one.', fam;
   end if;
 
   -- Act as the practice approver, a Manager of this family with two-factor.
@@ -62,4 +62,5 @@ $$;
 -- What is still waiting (an empty list means everything was approved).
 select 'Share transaction' as waiting, kind || ', ' || shares || ' shares, dated ' || transaction_date as what
 from public.share_transactions where status = 'draft'
-order by 2;
+union all
+select 'Removal', summary from public.removal_requests where status = 'pending';
