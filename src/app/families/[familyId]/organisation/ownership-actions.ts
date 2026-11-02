@@ -647,13 +647,11 @@ export async function addBeneficiaryClass(
   const name = text(form, "name");
   if (!name)
     go(to, "Please name the class, e.g. The descendants of Tom Hartley.");
-  const { error } = await ctx
-    .db!.from("beneficiary_classes")
-    .insert({
-      entity_id: entityId,
-      name,
-      description: optional(form, "description"),
-    });
+  const { error } = await ctx.db!.from("beneficiary_classes").insert({
+    entity_id: entityId,
+    name,
+    description: optional(form, "description"),
+  });
   go(
     to,
     error ? ownershipError(error.message) : undefined,
@@ -686,14 +684,12 @@ export async function addClassMember(
   if (!personId) go(to, "Please choose the person.");
   if (added && !isDate(added))
     go(to, "Please enter the date as day, month and year.");
-  const { error } = await ctx
-    .db!.from("beneficiary_class_members")
-    .insert({
-      entity_id: entityId,
-      class_id: classId,
-      person_id: personId,
-      added_on: added || null,
-    });
+  const { error } = await ctx.db!.from("beneficiary_class_members").insert({
+    entity_id: entityId,
+    class_id: classId,
+    person_id: personId,
+    added_on: added || null,
+  });
   go(
     to,
     error ? ownershipError(error.message) : undefined,

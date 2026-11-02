@@ -5,7 +5,11 @@ import { DB, adminUrl, dbUrl, type DbName } from "./db";
 
 const root = path.resolve(__dirname, "../..");
 
-async function rebuild(name: DbName, migrationsDir: string, extraFiles: string[]) {
+async function rebuild(
+  name: DbName,
+  migrationsDir: string,
+  extraFiles: string[],
+) {
   const admin = new Client({ connectionString: adminUrl() });
   await admin.connect();
   await admin.query(`drop database if exists ${name} with (force)`);
@@ -15,7 +19,9 @@ async function rebuild(name: DbName, migrationsDir: string, extraFiles: string[]
   const db = new Client({ connectionString: dbUrl(name) });
   await db.connect();
   try {
-    await db.query(readFileSync(path.join(__dirname, "supabase-auth-stub.sql"), "utf8"));
+    await db.query(
+      readFileSync(path.join(__dirname, "supabase-auth-stub.sql"), "utf8"),
+    );
     for (const file of readdirSync(migrationsDir).sort()) {
       await db.query(readFileSync(path.join(migrationsDir, file), "utf8"));
     }

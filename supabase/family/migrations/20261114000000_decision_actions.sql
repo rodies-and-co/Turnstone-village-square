@@ -18,7 +18,7 @@
 
 alter table public.decisions
   add column action text check (action in ('appoint', 'end_appointment', 'note_resignation', 'share_transaction')),
-  add column appointment_id uuid references public.appointments (id) on delete set null,
+  add column appointment_id uuid references public.appointments (id) on delete restrict,
   add column proposed jsonb;
 
 alter table public.decisions drop constraint decisions_outcome_check;
@@ -42,14 +42,19 @@ begin
   if auth.uid() is null or current_setting('vs.passing', true) = 'on' then
     return new;
   end if;
+  if tg_op = 'UPDATE' and (new.action, new.appointment_id, new.proposed) is distinct from (old.action, old.appointment_id, old.proposed) then
+    raise exception 'Decisions: what a decision will change can''t be altered. Withdraw it and record the change again.';
+  end if;
+  -- A drafted change keeps the wording it was drafted with, so the minute or
+  -- resolution always says what will happen.
+  if tg_op = 'UPDATE' and new.action is not null and (new.title, new.wording) is distinct from (old.title, old.wording) then
+    raise exception 'Decisions: the wording of a drafted change can''t be edited. Withdraw it and record the change again.';
+  end if;
   if new.action is null then
     if new.appointment_id is not null or new.proposed is not null then
       raise exception 'Decisions: only a decision that changes something carries its details.';
     end if;
     return new;
-  end if;
-  if tg_op = 'UPDATE' and (new.action, new.appointment_id, new.proposed) is distinct from (old.action, old.appointment_id, old.proposed) then
-    raise exception 'Decisions: what a decision will change can''t be altered. Withdraw it and record the change again.';
   end if;
   select coalesce(m.entity_id, w.entity_id), coalesce(m.body, w.body) into ent, body
   from (select 1) x
@@ -63,6 +68,13 @@ begin
     if new.appointment_id is not null or p is null or not (p ? 'role')
        or num_nonnulls(nullif(p->>'person_id', ''), nullif(p->>'organisation_id', ''), nullif(p->>'holder_entity_id', '')) <> 1 then
       raise exception 'Decisions: an appointment needs its role and who is to hold it.';
+    end if;
+    if p->>'role' not in ('director', 'alternate_director', 'secretary', 'nominated_officer', 'registered_agent', 'management_company',
+        'public_officer', 'auditor', 'accounting_officer', 'trustee', 'protector', 'enforcer', 'council_member',
+        'designated_member', 'member', 'manager', 'general_partner', 'limited_partner')
+       or coalesce(jsonb_typeof(p->'resident'), 'boolean') <> 'boolean' or coalesce(jsonb_typeof(p->'identity_verified'), 'boolean') <> 'boolean'
+       or (nullif(p->>'appointed_on', '') is not null and (p->>'appointed_on') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') then
+      raise exception 'Decisions: the appointment''s details aren''t right. Record it again.';
     end if;
     if nullif(p->>'holder_entity_id', '')::uuid = ent then
       raise exception 'Decisions: an entity can''t hold a role in itself.';
@@ -78,6 +90,8 @@ begin
     if new.action = 'note_resignation' and a.ceased_on is null then
       raise exception 'Decisions: record the resignation (its date) before noting it.';
     end if;
+  elsif new.action = 'end_appointment' and nullif(p->>'ceased_on', '') is not null and (p->>'ceased_on') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+    raise exception 'Decisions: the date of the removal isn''t right.';
   elsif new.action = 'share_transaction' and (new.appointment_id is not null or p is not null) then
     raise exception 'Decisions: a share decision is linked from the transaction itself.';
   end if;
@@ -100,7 +114,9 @@ declare
   ent uuid := private.decision_entity(new.id);
   p jsonb := new.proposed;
   t record;
+  changed integer;
 begin
+  begin
   if new.action = 'appoint' then
     insert into public.appointments (entity_id, role, person_id, organisation_id, holder_entity_id, appointed_on, resident, identity_verified, notes, basis, decision_id)
     values (
@@ -115,6 +131,10 @@ begin
     update public.appointments
       set ceased_on = greatest(coalesce(nullif(p->>'ceased_on', '')::date, new.passed_on), new.passed_on)
       where id = new.appointment_id and entity_id = ent and ceased_on is null;
+    get diagnostics changed = row_count;
+    if changed = 0 then
+      raise exception 'that appointment has already ended';
+    end if;
   end if;
   -- Share transactions this decision was drafted for go on the register,
   -- oldest first. (One only linked to an ordinary decision is approved by
@@ -124,6 +144,10 @@ begin
       update public.share_transactions set status = 'approved' where id = t.id;
     end loop;
   end if;
+  exception when others then
+    raise exception 'Decisions: item % ("%") couldn''t take effect: %. Put it right, or record it as not carried, then try again.',
+      new.item, new.title, regexp_replace(sqlerrm, '^(Shares|Appointments|Decisions): ', '');
+  end;
   return null;
 end;
 $$;
@@ -197,4 +221,128 @@ begin
 end;
 $$;
 
-revoke all on function private.decision_action_rules(), private.apply_decision() from public;
+-- A share transaction linked to a decision drafted for it is fixed: what
+-- goes on the register is what the decision says. One transaction per
+-- drafted decision, linked only while the decision can still change.
+create function private.share_link_rules()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  d public.decisions;
+  still_open boolean;
+  ignore constant text[] := array['status', 'transaction_date', 'approved_by', 'approved_at', 'certificate_number',
+    'balance_certificate_number', 'prepared_by', 'edited_by', 'updated_at'];
+begin
+  if auth.uid() is null or current_setting('vs.unlinking', true) = 'on' then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.decision_id is not null and old.status = 'draft'
+     and exists (select 1 from public.decisions x where x.id = old.decision_id and x.action = 'share_transaction') then
+    -- Only its approval (when the decision passes) may change it.
+    if not (new.status = 'approved' and (to_jsonb(new) - ignore) = (to_jsonb(old) - ignore)) then
+      raise exception 'Shares: this transaction was drafted into a decision, so it can''t be changed. Withdraw that item and record the transaction again.';
+    end if;
+    return new;
+  end if;
+  if new.decision_id is not null and (tg_op = 'INSERT' or new.decision_id is distinct from old.decision_id) then
+    select * into d from public.decisions where id = new.decision_id;
+    if d.action = 'share_transaction' then
+      if exists (select 1 from public.share_transactions s where s.decision_id = d.id and s.id <> new.id) then
+        raise exception 'Shares: that decision already has its transaction. Record a new decision for this one.';
+      end if;
+      select case when d.meeting_id is not null
+                  then exists (select 1 from public.meetings m where m.id = d.meeting_id and m.status in ('planned', 'held'))
+                  else exists (select 1 from public.written_resolutions w where w.id = d.resolution_id and w.status = 'draft') end
+        into still_open;
+      if not still_open or d.outcome <> 'proposed' then
+        raise exception 'Shares: that decision can no longer take a transaction. Choose another meeting or a new resolution.';
+      end if;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+-- Runs before the share transaction rules (name order).
+create trigger share_transactions_link before insert or update on public.share_transactions
+  for each row execute function private.share_link_rules();
+
+-- Removing a draft decision (with its meeting or resolution) unlinks the
+-- draft transactions that relied on it; they wait for a new decision.
+create function private.decision_unlink()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform set_config('vs.unlinking', 'on', true);
+  update public.share_transactions set basis = null, decision_id = null where decision_id = old.id and status = 'draft';
+  perform set_config('vs.unlinking', 'off', true);
+  return old;
+end;
+$$;
+create trigger decisions_unlink before delete on public.decisions
+  for each row execute function private.decision_unlink();
+
+-- An appointment named in a decision is kept with it.
+create or replace function private.removal_allowed(p_table text, p_id uuid, rec jsonb)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if p_table = 'appointments' and exists (select 1 from public.decisions d where d.appointment_id = p_id) then
+    raise exception 'Removal: this appointment is named in a minute or written resolution (its removal or resignation), so it is kept.';
+  end if;
+  if p_table = 'share_transactions' and rec->>'status' <> 'draft' then
+    raise exception 'Removal: an approved share transaction can''t be removed. Record another transaction to put it right.';
+  end if;
+  if p_table = 'entities' and exists (select 1 from public.share_transactions t where t.entity_id = p_id and t.status = 'approved') then
+    raise exception 'Removal: this entity has an approved share register, which is kept as a record. Mark it as dissolved instead.';
+  end if;
+  if p_table = 'share_classes' and exists (select 1 from public.share_transactions t where t.class_id = p_id and t.status = 'approved') then
+    raise exception 'Removal: this class has approved transactions, which are kept as a record.';
+  end if;
+  if p_table = 'entities' and exists (select 1 from public.appointments a where a.holder_entity_id = p_id and a.ceased_on is null) then
+    raise exception 'Removal: this entity still holds a role in another of the family''s entities (for example as trustee or director). End that appointment first.';
+  end if;
+  if p_table = 'outside_organisations' and exists (select 1 from public.appointments a where a.organisation_id = p_id and a.ceased_on is null) then
+    raise exception 'Removal: this service provider still holds a current appointment. End it first (Officers & appointments), then ask again.';
+  end if;
+  -- The minute book and the register of resolutions are kept for good.
+  if p_table in ('entities', 'governance_bodies') and (
+       exists (select 1 from public.meetings m where (m.entity_id = p_id or m.governance_body_id = p_id) and m.status = 'confirmed')
+       or exists (select 1 from public.written_resolutions w where (w.entity_id = p_id or w.governance_body_id = p_id) and w.status = 'passed')) then
+    raise exception 'Removal: this has confirmed minutes or passed resolutions, which are kept as a record.';
+  end if;
+  if p_table = 'meetings' and rec->>'status' = 'confirmed' then
+    raise exception 'Removal: a confirmed meeting is kept in the minute book.';
+  end if;
+  if p_table = 'written_resolutions' and rec->>'status' = 'passed' then
+    raise exception 'Removal: a passed resolution is kept in the register of resolutions.';
+  end if;
+  if p_table in ('meeting_attendees', 'decisions') and exists (select 1 from public.meetings m where m.id = (rec->>'meeting_id')::uuid and m.status = 'confirmed') then
+    raise exception 'Removal: this belongs to a confirmed meeting, which is kept as a record.';
+  end if;
+  if p_table in ('resolution_signatories', 'decisions') and exists (
+       select 1 from public.written_resolutions w where w.id = (rec->>'resolution_id')::uuid and w.status in ('circulated', 'passed')) then
+    raise exception 'Removal: this belongs to a resolution that has been circulated, which is kept as a record.';
+  end if;
+  if p_table in ('people', 'outside_organisations', 'entities') and (
+       exists (select 1 from public.meeting_attendees a join public.meetings m on m.id = a.meeting_id
+               where p_id in (a.person_id, a.organisation_id, a.holder_entity_id) and m.status = 'confirmed')
+       or exists (select 1 from public.resolution_signatories s join public.written_resolutions w on w.id = s.resolution_id
+                  where p_id in (s.person_id, s.organisation_id, s.holder_entity_id) and w.status = 'passed')) then
+    raise exception 'Removal: this is named in the minute book or the register of resolutions, which are kept as a record.';
+  end if;
+end;
+$$;
+revoke all on function private.removal_allowed(text, uuid, jsonb) from public;
+
+revoke all on function private.decision_action_rules(), private.apply_decision(), private.share_link_rules(), private.decision_unlink() from public;
+

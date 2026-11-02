@@ -136,7 +136,13 @@ export async function draftDecision(
       organisation_id: v.organisation_id,
       holder_entity_id: v.holder_entity_id,
     }));
-    if (rows.length) await db.from("resolution_signatories").insert(rows);
+    if (rows.length) {
+      const { error: e } = await db.from("resolution_signatories").insert(rows);
+      if (e)
+        return {
+          error: `A new draft resolution was created, but its signatories weren't added: ${meetingsError(e.message)}`,
+        };
+    }
   } else if (target.kind === "meeting") {
     const { data } = await db
       .from("meetings")
@@ -187,7 +193,13 @@ export async function draftDecision(
     })
     .select("id")
     .single();
-  if (error || !d) return { error: meetingsError(error?.message) };
+  if (error || !d)
+    return {
+      error:
+        target.kind === "new_resolution"
+          ? `A new draft resolution was created, but the decision couldn't be added to it: ${meetingsError(error?.message)}`
+          : meetingsError(error?.message),
+    };
   const href =
     column === "meeting_id"
       ? `/families/${ctx.family.id}/meetings/${parentId}`

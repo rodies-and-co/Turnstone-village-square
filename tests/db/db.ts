@@ -60,7 +60,12 @@ export async function connect(name: DbName) {
 
 export type Session =
   | { kind: "anonymous" }
-  | { kind: "user"; id: string; aal: "aal1" | "aal2"; claims?: Record<string, unknown> };
+  | {
+      kind: "user";
+      id: string;
+      aal: "aal1" | "aal2";
+      claims?: Record<string, unknown>;
+    };
 
 // Runs `fn` as if a request came in through the Supabase API with this
 // session, then rolls back so tests never affect each other.
@@ -73,7 +78,9 @@ export async function as<T>(
   try {
     if (session.kind === "anonymous") {
       await db.query("set local role anon");
-      await db.query(`select set_config('request.jwt.claims', '{"role":"anon"}', true)`);
+      await db.query(
+        `select set_config('request.jwt.claims', '{"role":"anon"}', true)`,
+      );
     } else {
       const claims = {
         ...(session.claims ?? {}),
@@ -112,7 +119,12 @@ export async function hubClaims(hub: Client, userId: string) {
     await hub.query("set local role supabase_auth_admin");
     const { rows } = await hub.query(
       "select public.custom_access_token_hook($1::jsonb) as result",
-      [JSON.stringify({ user_id: userId, claims: { sub: userId, role: "authenticated", iss: HUB_ISSUER } })],
+      [
+        JSON.stringify({
+          user_id: userId,
+          claims: { sub: userId, role: "authenticated", iss: HUB_ISSUER },
+        }),
+      ],
     );
     return rows[0].result.claims as Record<string, unknown>;
   } finally {
@@ -120,8 +132,15 @@ export async function hubClaims(hub: Client, userId: string) {
   }
 }
 
-export async function count(client: Client, sql: string, params: unknown[] = []) {
-  const { rows } = await client.query(`select count(*)::int as n from (${sql}) q`, params);
+export async function count(
+  client: Client,
+  sql: string,
+  params: unknown[] = [],
+) {
+  const { rows } = await client.query(
+    `select count(*)::int as n from (${sql}) q`,
+    params,
+  );
   return rows[0].n as number;
 }
 
@@ -138,9 +157,16 @@ export async function tablesWithRls(client: Client) {
 
 // Switches the signed-in user inside an open transaction (as in `as`), so a
 // sequence of steps by different people can be tested in one go.
-export async function switchUser(db: Client, hub: Client, id: string, aal: "aal1" | "aal2" = "aal2") {
+export async function switchUser(
+  db: Client,
+  hub: Client,
+  id: string,
+  aal: "aal1" | "aal2" = "aal2",
+) {
   const claims = await hubClaims(hub, id);
-  await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ ...claims, sub: id, role: "authenticated", aal })]);
+  await db.query("select set_config('request.jwt.claims', $1, true)", [
+    JSON.stringify({ ...claims, sub: id, role: "authenticated", aal }),
+  ]);
 }
 
 // Removing takes two people: one asks, another Manager approves.
@@ -153,7 +179,13 @@ export async function removeWithApproval(
   approver: string = USERS.hartleyManager,
 ) {
   await switchUser(db, hub, asker);
-  const request = (await db.query("select public.request_removal($1, $2) as id", [table, id])).rows[0].id as string;
+  const request = (
+    await db.query("select public.request_removal($1, $2) as id", [table, id])
+  ).rows[0].id as string;
   await switchUser(db, hub, approver);
-  return (await db.query("select public.decide_removal($1, true) as result", [request])).rows[0].result as string;
+  return (
+    await db.query("select public.decide_removal($1, true) as result", [
+      request,
+    ])
+  ).rows[0].result as string;
 }

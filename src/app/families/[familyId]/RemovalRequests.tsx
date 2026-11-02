@@ -1,7 +1,11 @@
 import { ConfirmRemove, SubmitButton } from "@/components/feedback";
 import { Card, Chip, Field, Fold, Row, Rows } from "@/components/ui";
 import type { FamilyContext } from "@/lib/family-context";
-import { approveRemoval, rejectRemoval, withdrawRemoval } from "./removal-actions";
+import {
+  approveRemoval,
+  rejectRemoval,
+  withdrawRemoval,
+} from "./removal-actions";
 
 type Request = {
   id: string;
@@ -14,17 +18,43 @@ type Request = {
   decision_note: string | null;
 };
 
-const when = (d: string) => new Date(d).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" });
-const STATUS = { approved: "Removed", rejected: "Turned down", withdrawn: "Withdrawn", pending: "Waiting" } as const;
+const when = (d: string) =>
+  new Date(d).toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/London",
+  });
+const STATUS = {
+  approved: "Removed",
+  rejected: "Turned down",
+  withdrawn: "Withdrawn",
+  pending: "Waiting",
+} as const;
 
 // Removals waiting for a second person, on the family Overview. Shown to
 // Managers and Administrators (the database shows the requests to no one else).
-export async function RemovalRequests({ ctx, familyId }: { ctx: FamilyContext; familyId: string }) {
+export async function RemovalRequests({
+  ctx,
+  familyId,
+}: {
+  ctx: FamilyContext;
+  familyId: string;
+}) {
   if (!ctx.db || !ctx.canEdit) return null;
-  const columns = "id, summary, reason, status, requested_by, requested_at, decided_at, decision_note";
+  const columns =
+    "id, summary, reason, status, requested_by, requested_at, decided_at, decision_note";
   const [{ data: pending }, { data: done }] = await Promise.all([
-    ctx.db.from("removal_requests").select(columns).eq("status", "pending").order("requested_at"),
-    ctx.db.from("removal_requests").select(columns).neq("status", "pending").order("decided_at", { ascending: false }).limit(10),
+    ctx.db
+      .from("removal_requests")
+      .select(columns)
+      .eq("status", "pending")
+      .order("requested_at"),
+    ctx.db
+      .from("removal_requests")
+      .select(columns)
+      .neq("status", "pending")
+      .order("decided_at", { ascending: false })
+      .limit(10),
   ]);
   const waiting = (pending ?? []) as Request[];
   const recent = (done ?? []) as Request[];
@@ -37,13 +67,20 @@ export async function RemovalRequests({ ctx, familyId }: { ctx: FamilyContext; f
         description="Nothing is removed by one person alone. Whoever asks can't approve: another Manager does. A copy of what was removed is kept."
       >
         {waiting.length === 0 ? (
-          <p className="border-y border-border py-3 text-ink-3">Nothing is waiting.</p>
+          <p className="border-y border-border py-3 text-ink-3">
+            Nothing is waiting.
+          </p>
         ) : (
           <Rows>
             {waiting.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
+              >
                 <div className="min-w-0">
-                  <div className="text-[15px] font-medium text-ink">{r.summary}</div>
+                  <div className="text-[15px] font-medium text-ink">
+                    {r.summary}
+                  </div>
                   <div className="text-sm text-ink-3">
                     Asked {when(r.requested_at)}
                     {r.requested_by === me ? " by you" : ""}
@@ -52,13 +89,24 @@ export async function RemovalRequests({ ctx, familyId }: { ctx: FamilyContext; f
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {ctx.canManage && r.requested_by !== me && (
-                    <ConfirmRemove action={approveRemoval.bind(null, familyId, r.id)} what={r.summary} label="Approve and remove" asks={false} primary />
+                    <ConfirmRemove
+                      action={approveRemoval.bind(null, familyId, r.id)}
+                      what={r.summary}
+                      label="Approve and remove"
+                      asks={false}
+                      primary
+                    />
                   )}
                   {r.requested_by === me && (
                     <>
-                      <p className="text-sm text-ink-3">You asked, so another Manager approves.</p>
+                      <p className="text-sm text-ink-3">
+                        You asked, so another Manager approves.
+                      </p>
                       <form action={withdrawRemoval.bind(null, familyId, r.id)}>
-                        <SubmitButton variant="quiet" pendingText="Withdrawing…">
+                        <SubmitButton
+                          variant="quiet"
+                          pendingText="Withdrawing…"
+                        >
                           Withdraw
                         </SubmitButton>
                       </form>
@@ -66,8 +114,15 @@ export async function RemovalRequests({ ctx, familyId }: { ctx: FamilyContext; f
                   )}
                   {ctx.canManage && (
                     <Fold label="Turn down">
-                      <form action={rejectRemoval.bind(null, familyId, r.id)} className="space-y-3">
-                        <Field id={`note-${r.id}`} label="Why (optional)" name="note" />
+                      <form
+                        action={rejectRemoval.bind(null, familyId, r.id)}
+                        className="space-y-3"
+                      >
+                        <Field
+                          id={`note-${r.id}`}
+                          label="Why (optional)"
+                          name="note"
+                        />
                         <SubmitButton variant="secondary" pendingText="Saving…">
                           Turn down
                         </SubmitButton>
@@ -90,7 +145,12 @@ export async function RemovalRequests({ ctx, familyId }: { ctx: FamilyContext; f
                       <Chip>{STATUS[r.status]}</Chip> {r.summary}
                     </span>
                   }
-                  meta={[r.decided_at ? when(r.decided_at) : null, r.decision_note].filter(Boolean).join(" · ")}
+                  meta={[
+                    r.decided_at ? when(r.decided_at) : null,
+                    r.decision_note,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 />
               ))}
             </Rows>

@@ -378,39 +378,41 @@ export default async function ResolutionPage({
                     )}
                     {draft && (
                       <div className="flex flex-wrap items-start gap-3">
-                        <Fold label="Change the wording">
-                          <form
-                            action={updateDecision.bind(
-                              null,
-                              familyId,
-                              "resolution",
-                              resolutionId,
-                              d.id,
-                            )}
-                            className="space-y-3"
-                          >
-                            <Field
-                              id={`title-${d.id}`}
-                              label="Title"
-                              name="title"
-                              defaultValue={d.title}
-                              required
-                            />
-                            <TextArea
-                              id={`bg-${d.id}`}
-                              label="Background"
-                              name="background"
-                              defaultValue={d.background}
-                            />
-                            <TextArea
-                              id={`wording-${d.id}`}
-                              label="Wording"
-                              name="wording"
-                              defaultValue={d.wording}
-                            />
-                            <SubmitButton>Save</SubmitButton>
-                          </form>
-                        </Fold>
+                        {!d.action && (
+                          <Fold label="Change the wording">
+                            <form
+                              action={updateDecision.bind(
+                                null,
+                                familyId,
+                                "resolution",
+                                resolutionId,
+                                d.id,
+                              )}
+                              className="space-y-3"
+                            >
+                              <Field
+                                id={`title-${d.id}`}
+                                label="Title"
+                                name="title"
+                                defaultValue={d.title}
+                                required
+                              />
+                              <TextArea
+                                id={`bg-${d.id}`}
+                                label="Background"
+                                name="background"
+                                defaultValue={d.background}
+                              />
+                              <TextArea
+                                id={`wording-${d.id}`}
+                                label="Wording"
+                                name="wording"
+                                defaultValue={d.wording}
+                              />
+                              <SubmitButton>Save</SubmitButton>
+                            </form>
+                          </Fold>
+                        )}
                         {d.outcome === "proposed" ? (
                           <form
                             action={setOutcome.bind(

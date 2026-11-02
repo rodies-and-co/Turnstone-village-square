@@ -192,7 +192,7 @@ export function appointWording(o: {
 }) {
   return {
     title: `Appointment of ${o.name} as ${o.role.toLowerCase()}`,
-    wording: `That ${o.name} be appointed as ${o.role.toLowerCase()}${o.from ? ` with effect from ${longDate(o.from)}` : ", with effect from the date of this decision"}, and that the register be updated.`,
+    wording: `That ${o.name} be appointed as ${o.role.toLowerCase()}${o.from ? ` with effect from ${longDate(o.from)} (or the date of this decision, if later)` : ", with effect from the date of this decision"}, and that the register be updated.`,
   };
 }
 
@@ -203,7 +203,7 @@ export function removalWording(o: {
 }) {
   return {
     title: `Removal of ${o.name} as ${o.role.toLowerCase()}`,
-    wording: `That ${o.name} be removed as ${o.role.toLowerCase()}${o.from ? ` with effect from ${longDate(o.from)}` : ", with effect from the date of this decision"}, and that the register be updated.`,
+    wording: `That ${o.name} be removed as ${o.role.toLowerCase()}${o.from ? ` with effect from ${longDate(o.from)} (or the date of this decision, if later)` : ", with effect from the date of this decision"}, and that the register be updated.`,
   };
 }
 

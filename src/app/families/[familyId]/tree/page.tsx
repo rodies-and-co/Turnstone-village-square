@@ -29,7 +29,14 @@ type Row = {
   three_circle_role: keyof typeof THREE_CIRCLE_ROLES | null;
   branch_id: string | null;
 };
-type Partnership = { person_a: string; person_b: string; kind: string; start_date: string | null; end_date: string | null; end_reason: string | null };
+type Partnership = {
+  person_a: string;
+  person_b: string;
+  kind: string;
+  start_date: string | null;
+  end_date: string | null;
+  end_reason: string | null;
+};
 
 // The Tree: everyone in the family, grouped by generation, as in The Family
 // Square's Family Register. Non-family people (advisers, trustees and so on)
@@ -44,7 +51,9 @@ export default async function TreePage({
   const { familyId } = await params;
   const { q = "", saved } = await searchParams;
   const ctx = await getFamilyContext(familyId);
-  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
+  const familyName = /family$/i.test(ctx.family.name.trim())
+    ? ctx.family.name
+    : `${ctx.family.name} family`;
 
   let people: Row[] = [];
   let branches = new Map<string, string>();
@@ -55,16 +64,22 @@ export default async function TreePage({
     const [p, b, l, m] = await Promise.all([
       ctx.db
         .from("people")
-        .select("id, full_names, surname, maiden_name, known_as, birth_year, deceased, member_type, three_circle_role, branch_id")
+        .select(
+          "id, full_names, surname, maiden_name, known_as, birth_year, deceased, member_type, three_circle_role, branch_id",
+        )
         .order("birth_year", { nullsFirst: false })
         .order("surname"),
       ctx.db.from("branches").select("id, name"),
       ctx.db.from("parent_child").select("parent_id, child_id"),
-      ctx.db.from("partnerships").select("person_a, person_b, kind, start_date, end_date, end_reason"),
+      ctx.db
+        .from("partnerships")
+        .select("person_a, person_b, kind, start_date, end_date, end_reason"),
     ]);
     loadError = Boolean(p.error);
     people = (p.data ?? []) as Row[];
-    branches = new Map((b.data ?? []).map((x: { id: string; name: string }) => [x.id, x.name]));
+    branches = new Map(
+      (b.data ?? []).map((x: { id: string; name: string }) => [x.id, x.name]),
+    );
     links = (l.data ?? []) as typeof links;
     partnerships = (m.data ?? []) as Partnership[];
   }
@@ -89,7 +104,9 @@ export default async function TreePage({
     const g = gens.get(p.id) ?? null;
     groups.set(g, [...(groups.get(g) ?? []), p]);
   }
-  const ordered = [...groups.entries()].sort(([a], [b]) => (a ?? 99) - (b ?? 99));
+  const ordered = [...groups.entries()].sort(
+    ([a], [b]) => (a ?? 99) - (b ?? 99),
+  );
   const nonFamily = shown.filter((p) => p.member_type === "non_family");
 
   const familyCount = family.length;
@@ -103,9 +120,13 @@ export default async function TreePage({
       >
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="text-[15px] font-medium text-ink">{names.get(p.id)}</span>
+            <span className="text-[15px] font-medium text-ink">
+              {names.get(p.id)}
+            </span>
             {p.deceased && <Chip>Deceased</Chip>}
-            {p.member_type === "family_not_succession" && <Chip>Not in succession</Chip>}
+            {p.member_type === "family_not_succession" && (
+              <Chip>Not in succession</Chip>
+            )}
           </span>
           <span className="block text-sm text-ink-3">{lifeLine(p)}</span>
         </span>
@@ -118,7 +139,9 @@ export default async function TreePage({
               ? branches.get(p.branch_id)
               : ""}
         </span>
-        <span className="text-sm text-ink-2">{partnershipLine(p.id, partnerships, firstName) ?? ""}</span>
+        <span className="text-sm text-ink-2">
+          {partnershipLine(p.id, partnerships, firstName) ?? ""}
+        </span>
       </Link>
     </li>
   );
@@ -127,32 +150,64 @@ export default async function TreePage({
     <AppShell
       family={{ id: familyId, name: ctx.family.name }}
       section="tree"
-      crumbs={[["My families", "/"], [familyName, `/families/${familyId}`], ["The Tree"]]}
-      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
+      crumbs={[
+        ["My families", "/"],
+        [familyName, `/families/${familyId}`],
+        ["The Tree"],
+      ]}
+      user={{
+        name: ctx.displayName,
+        roleLabel: ctx.roleLabel,
+        hasTwoFactor: ctx.hasTwoFactor,
+      }}
     >
-      {saved && <Toast key={`s-${saved}-${Date.now()}`} message={savedMessage(saved)!} />}
+      {saved && (
+        <Toast
+          key={`s-${saved}-${Date.now()}`}
+          message={savedMessage(saved)!}
+        />
+      )}
       <PageTitle
         eyebrow="Recording the facts"
         title="The Tree"
         subtitle={`${familyCount} family ${familyCount === 1 ? "member" : "members"}, ${nonFamilyCount} non-family`}
         actions={
           ctx.canEdit && (
-            <Link href={`/families/${familyId}/tree/new`} className="btn-primary">
+            <Link
+              href={`/families/${familyId}/tree/new`}
+              className="btn-primary"
+            >
               Add person
             </Link>
           )
         }
       />
 
-      {!ctx.db && <Alert>This family&apos;s database isn&apos;t connected yet.</Alert>}
-      {loadError && <Alert>The family database could not be read. Sign out and in again, then try once more.</Alert>}
+      {!ctx.db && (
+        <Alert>This family&apos;s database isn&apos;t connected yet.</Alert>
+      )}
+      {loadError && (
+        <Alert>
+          The family database could not be read. Sign out and in again, then try
+          once more.
+        </Alert>
+      )}
 
       <form className="mb-6 flex flex-wrap items-end gap-2" role="search">
         <div className="w-full sm:w-80">
-          <label htmlFor="q" className="mb-1 block text-sm font-medium text-ink">
+          <label
+            htmlFor="q"
+            className="mb-1 block text-sm font-medium text-ink"
+          >
             Find a person
           </label>
-          <input id="q" name="q" defaultValue={q} className="text-input" placeholder="Name, Known as or maiden name" />
+          <input
+            id="q"
+            name="q"
+            defaultValue={q}
+            className="text-input"
+            placeholder="Name, Known as or maiden name"
+          />
         </div>
         <button type="submit" className="btn-secondary">
           Search
@@ -172,15 +227,24 @@ export default async function TreePage({
       <div className="space-y-5">
         {ordered.map(([g, rows]) => (
           <Card key={String(g)} title={generationName(g)}>
-            <ul className="divide-y divide-border border-t border-border">{rows.map(row)}</ul>
+            <ul className="divide-y divide-border border-t border-border">
+              {rows.map(row)}
+            </ul>
           </Card>
         ))}
         {nonFamily.length > 0 && (
-          <Card title="Non-family" description="Advisers, trustees, employees and others who are not family.">
-            <ul className="divide-y divide-border border-t border-border">{nonFamily.map(row)}</ul>
+          <Card
+            title="Non-family"
+            description="Advisers, trustees, employees and others who are not family."
+          >
+            <ul className="divide-y divide-border border-t border-border">
+              {nonFamily.map(row)}
+            </ul>
           </Card>
         )}
-        {people.length > 0 && shown.length === 0 && <p className="text-ink">Nobody matches &ldquo;{q}&rdquo;.</p>}
+        {people.length > 0 && shown.length === 0 && (
+          <p className="text-ink">Nobody matches &ldquo;{q}&rdquo;.</p>
+        )}
         {people.length === 0 && ctx.db && !loadError && (
           <Card>
             <p className="text-ink">Nobody has been added yet.</p>

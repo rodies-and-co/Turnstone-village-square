@@ -1145,3 +1145,127 @@ describe("Changes that follow a decision", () => {
     });
   });
 });
+
+describe("Drafted changes stay as drafted", () => {
+  async function draftedShareDecision(db: Client) {
+    await switchUser(db, hub, ADMIN);
+    const w = (
+      await one(
+        db,
+        "insert into written_resolutions (body, entity_id, title) values ('board', $1, 'Allotment') returning id",
+        [HOLDINGS],
+      )
+    ).id;
+    const d = (
+      await one(
+        db,
+        "insert into decisions (resolution_id, item, title, wording, action) values ($1, 1, 'Allotment', 'w', 'share_transaction') returning id",
+        [w],
+      )
+    ).id;
+    await db.query(
+      "update share_transactions set basis = 'decision', decision_id = $2 where id = $1",
+      [DRAFT_ISSUE, d],
+    );
+    return { w, d } as { w: string; d: string };
+  }
+
+  it("a transaction drafted into a decision can't be changed, and a decision takes one transaction only", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const { d } = await draftedShareDecision(db);
+      await refused(
+        db,
+        "update share_transactions set shares = 5 where id = $1",
+        [DRAFT_ISSUE],
+        /drafted into a decision/,
+      );
+      await refused(
+        db,
+        "insert into share_transactions (entity_id, class_id, kind, transaction_date, shares, to_person_id, basis, decision_id) values ($1, $2, 'issue', current_date, 1, $3, 'decision', $4)",
+        [HOLDINGS, ORDINARY, NORTH, d],
+        /already has its transaction/,
+      );
+      await refused(
+        db,
+        "update decisions set wording = 'Something else' where id = $1",
+        [d],
+        /can't be edited/,
+      );
+      await refused(
+        db,
+        "update decisions set action = null where id = $1",
+        [d],
+        /can't be altered/,
+      );
+    });
+  });
+
+  it("removing the draft resolution unlinks the transaction, which waits for a new decision", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const { w } = await draftedShareDecision(db);
+      expect(await removeWithApproval(db, hub, "written_resolutions", w)).toBe(
+        "approved",
+      );
+      expect(
+        await one(
+          db,
+          "select status, basis, decision_id from share_transactions where id = $1",
+          [DRAFT_ISSUE],
+        ),
+      ).toEqual({ status: "draft", basis: null, decision_id: null });
+    });
+  });
+
+  it("an appointment named in a decision is kept; a removal of one already ended says so", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const appt = (
+        await one(
+          db,
+          "select id from appointments where entity_id = $1 and person_id = $2",
+          [HOLDINGS, SOUTH],
+        )
+      ).id;
+      const w = (
+        await one(
+          db,
+          "insert into written_resolutions (body, entity_id, title) values ('board', $1, 'Removal') returning id",
+          [HOLDINGS],
+        )
+      ).id;
+      await db.query(
+        "insert into decisions (resolution_id, item, title, wording, action, appointment_id) values ($1, 1, 'Removal', 'w', 'end_appointment', $2)",
+        [w, appt],
+      );
+      await refused(
+        db,
+        "select public.request_removal('appointments', $1)",
+        [appt],
+        /named in a minute or written resolution/,
+      );
+      for (const p of [NORTH, SOUTH])
+        await db.query(
+          "insert into resolution_signatories (resolution_id, person_id) values ($1, $2)",
+          [w, p],
+        );
+      await db.query(
+        "update written_resolutions set status = 'circulated', circulated_on = current_date - 3 where id = $1",
+        [w],
+      );
+      await db.query(
+        "update resolution_signatories set signed_on = current_date - 1 where resolution_id = $1",
+        [w],
+      );
+      await db.query(
+        "update appointments set ceased_on = current_date - 2 where id = $1",
+        [appt],
+      );
+      await switchUser(db, hub, MANAGER);
+      await refused(
+        db,
+        "update written_resolutions set status = 'passed' where id = $1",
+        [w],
+        /item 1 \("Removal"\) couldn't take effect: that appointment has already ended/,
+      );
+    });
+  });
+});

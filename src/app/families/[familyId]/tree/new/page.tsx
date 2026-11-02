@@ -21,18 +21,35 @@ export default async function NewPersonPage({
   const ctx = await getFamilyContext(familyId);
   if (!ctx.canEdit || !ctx.db) redirect(`/families/${familyId}/tree`);
 
-  const { data: branches } = await ctx.db.from("branches").select("id, name").order("name");
+  const { data: branches } = await ctx.db
+    .from("branches")
+    .select("id, name")
+    .order("name");
 
-  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
+  const familyName = /family$/i.test(ctx.family.name.trim())
+    ? ctx.family.name
+    : `${ctx.family.name} family`;
 
   return (
     <AppShell
       family={{ id: familyId, name: ctx.family.name }}
       section="tree"
-      crumbs={[["My families", "/"], [familyName, `/families/${familyId}`], ["The Tree", `/families/${familyId}/tree`], ["Add person"]]}
-      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
+      crumbs={[
+        ["My families", "/"],
+        [familyName, `/families/${familyId}`],
+        ["The Tree", `/families/${familyId}/tree`],
+        ["Add person"],
+      ]}
+      user={{
+        name: ctx.displayName,
+        roleLabel: ctx.roleLabel,
+        hasTwoFactor: ctx.hasTwoFactor,
+      }}
     >
-      <PageTitle title="Add person" subtitle="Personal details, addresses and family links can be added after saving." />
+      <PageTitle
+        title="Add person"
+        subtitle="Personal details, addresses and family links can be added after saving."
+      />
       {error && (
         <div className="mb-4">
           <Alert>Not saved: {errorMessage(error)}</Alert>

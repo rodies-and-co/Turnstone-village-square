@@ -5,8 +5,21 @@ import { Toast } from "@/components/feedback";
 import { Chip, UnderlineTabs } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
 import { errorMessage, savedMessage } from "@/lib/messages";
-import { THREE_CIRCLE_ROLES, displayNames, lifeLine, type PersonSummary } from "@/lib/people";
-import { AddressesTab, FinancesTab, HistoryTab, IdentityTab, LaterTab, OverviewTab, RelationshipsTab } from "./tabs";
+import {
+  THREE_CIRCLE_ROLES,
+  displayNames,
+  lifeLine,
+  type PersonSummary,
+} from "@/lib/people";
+import {
+  AddressesTab,
+  FinancesTab,
+  HistoryTab,
+  IdentityTab,
+  LaterTab,
+  OverviewTab,
+  RelationshipsTab,
+} from "./tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -39,23 +52,48 @@ export default async function PersonPage({
   // Everyone this user may see, for names and for choosing family links.
   const { data: everyone } = await ctx.db
     .from("people")
-    .select("id, full_names, surname, maiden_name, known_as, birth_year, deceased, member_type, three_circle_role, branch_id, user_id")
+    .select(
+      "id, full_names, surname, maiden_name, known_as, birth_year, deceased, member_type, three_circle_role, branch_id, user_id",
+    )
     .order("surname");
-  const person = (everyone ?? []).find((p: { id: string }) => p.id === personId);
+  const person = (everyone ?? []).find(
+    (p: { id: string }) => p.id === personId,
+  );
   if (!person) notFound();
   const names = displayNames((everyone ?? []) as PersonSummary[]);
 
-  const shared = { ctx, familyId, personId, person, everyone: everyone ?? [], names };
+  const shared = {
+    ctx,
+    familyId,
+    personId,
+    person,
+    everyone: everyone ?? [],
+    names,
+  };
 
-  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
+  const familyName = /family$/i.test(ctx.family.name.trim())
+    ? ctx.family.name
+    : `${ctx.family.name} family`;
   const { data: branch } = person.branch_id
-    ? await ctx.db.from("branches").select("name").eq("id", person.branch_id).maybeSingle()
+    ? await ctx.db
+        .from("branches")
+        .select("name")
+        .eq("id", person.branch_id)
+        .maybeSingle()
     : { data: null };
   const summary = [
     lifeLine(person),
     branch?.name,
-    person.three_circle_role ? THREE_CIRCLE_ROLES[person.three_circle_role as keyof typeof THREE_CIRCLE_ROLES] : null,
-    person.member_type === "non_family" ? "Non-family" : person.member_type === "family_not_succession" ? "Family, not in succession" : null,
+    person.three_circle_role
+      ? THREE_CIRCLE_ROLES[
+          person.three_circle_role as keyof typeof THREE_CIRCLE_ROLES
+        ]
+      : null,
+    person.member_type === "non_family"
+      ? "Non-family"
+      : person.member_type === "family_not_succession"
+        ? "Family, not in succession"
+        : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -64,8 +102,17 @@ export default async function PersonPage({
     <AppShell
       family={{ id: familyId, name: ctx.family.name }}
       section="tree"
-      crumbs={[["My families", "/"], [familyName, `/families/${familyId}`], ["The Tree", `/families/${familyId}/tree`], [names.get(personId) ?? "Person"]]}
-      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
+      crumbs={[
+        ["My families", "/"],
+        [familyName, `/families/${familyId}`],
+        ["The Tree", `/families/${familyId}/tree`],
+        [names.get(personId) ?? "Person"],
+      ]}
+      user={{
+        name: ctx.displayName,
+        roleLabel: ctx.roleLabel,
+        hasTwoFactor: ctx.hasTwoFactor,
+      }}
     >
       <PageTitle
         title={
@@ -91,16 +138,36 @@ export default async function PersonPage({
       <UnderlineTabs
         label="Record sections"
         current={tab}
-        items={TABS.map(([t, text]) => [t, text, `/families/${familyId}/tree/${personId}?tab=${t}`] as [string, string, string])}
+        items={TABS.map(
+          ([t, text]) =>
+            [t, text, `/families/${familyId}/tree/${personId}?tab=${t}`] as [
+              string,
+              string,
+              string,
+            ],
+        )}
       />
 
       <div className="mt-6 space-y-5">
         {/* The error shows on the page and as a message at the bottom of the
             screen (wherever the person has scrolled to); only the message is
             read out, so screen readers don't hear it twice. */}
-        {sp.error && <p className="alert">Not saved: {errorMessage(sp.error)}</p>}
-        {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
-        {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
+        {sp.error && (
+          <p className="alert">Not saved: {errorMessage(sp.error)}</p>
+        )}
+        {sp.error && (
+          <Toast
+            key={`e-${sp.error}-${Date.now()}`}
+            kind="error"
+            message={errorMessage(sp.error)!}
+          />
+        )}
+        {sp.saved && !sp.error && (
+          <Toast
+            key={`s-${sp.saved}-${Date.now()}`}
+            message={savedMessage(sp.saved)!}
+          />
+        )}
 
         {tab === "overview" && <OverviewTab {...shared} />}
         {tab === "identity" && <IdentityTab {...shared} />}
@@ -109,13 +176,22 @@ export default async function PersonPage({
         {tab === "finances" && <FinancesTab {...shared} />}
         {tab === "records" && (
           <LaterTab title="Records and reports">
-            Reports on this person&apos;s ownership, roles and interests come with the Organisation stage.
+            Reports on this person&apos;s ownership, roles and interests come
+            with the Organisation stage.
           </LaterTab>
         )}
         {tab === "todo" && (
-          <LaterTab title="To do">This will show this person&apos;s items from the family&apos;s one to-do list, once Organising is built.</LaterTab>
+          <LaterTab title="To do">
+            This will show this person&apos;s items from the family&apos;s one
+            to-do list, once Organising is built.
+          </LaterTab>
         )}
-        {tab === "risks" && <LaterTab title="Risk notes">This will show risks linked to this person, from the family&apos;s one risk register.</LaterTab>}
+        {tab === "risks" && (
+          <LaterTab title="Risk notes">
+            This will show risks linked to this person, from the family&apos;s
+            one risk register.
+          </LaterTab>
+        )}
         {tab === "history" && <HistoryTab {...shared} />}
       </div>
     </AppShell>

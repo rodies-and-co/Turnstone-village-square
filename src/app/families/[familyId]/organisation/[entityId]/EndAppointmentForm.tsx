@@ -109,7 +109,7 @@ export function EndAppointmentForm({
             <p className="mt-1 text-xs text-ink-3">
               {reason === "resigned"
                 ? "It ends on the date of the resignation. The wording (“The board noted the resignation of …”) is added for you."
-                : "The wording is drafted for you. The appointment ends once the meeting is confirmed or the resolution passes."}
+                : "The wording is drafted for you. The appointment ends once the meeting is confirmed or the resolution passes. Check the articles: in many places (the UK, for example) a director is removed by the members at a meeting, not by the board."}
             </p>
           </div>
         )}
