@@ -16,7 +16,7 @@ import {
   type BoRule,
   type Holder,
 } from "@/lib/ownership";
-import { registerList } from "@/lib/registers";
+import { certificateHistory, registerList } from "@/lib/registers";
 import {
   loadOrganisationData,
   type OrganisationData,
@@ -334,12 +334,19 @@ export async function RegistersTab({
 
   if (key === "members") {
     const registers = data.registersFor(entity.id);
-    const ledger = data.transactions.filter(
-      (t) =>
-        t.entity_id === entity.id &&
-        t.status === "approved" &&
-        t.kind !== "authorise",
-    );
+    const ledger = data.transactions
+      .filter(
+        (t) =>
+          t.entity_id === entity.id &&
+          t.status === "approved" &&
+          t.kind !== "authorise",
+      )
+      // In date order, so each member's first and last dates are right.
+      .sort(
+        (a, b) =>
+          a.transaction_date.localeCompare(b.transaction_date) ||
+          (a.approved_at ?? "").localeCompare(b.approved_at ?? ""),
+      );
     const memberKeys = [
       ...new Set(
         ledger
@@ -380,23 +387,85 @@ export async function RegistersTab({
       (m) => m.ceased,
       (m) => m.entered,
     );
-    const held = (m: (typeof members)[number]) =>
-      m.total === 0
-        ? "None"
-        : m.holdings
-            .map((x) => `${formatShares(x.h!.shares)} ${x.r.shareClass.name}`)
-            .join("; ");
+    // Authorised capital first, then every certificate by class and number
+    // (former members' cancelled certificates too), with each class's total.
+    const authorisedRows = registers.filter((r) => r.authorised > 0);
+    const certs = certificateHistory(
+      registers.map((r) => r.shareClass),
+      data.transactions.filter((t) => t.entity_id === entity.id),
+    );
+    const par = (r: (typeof registers)[number]) =>
+      r.shareClass.par_value !== null ? Number(r.shareClass.par_value) : null;
+    const money = (n: number, currency: string) =>
+      `${currency} ${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     body = members.length ? (
       <>
-        <Summary
-          head={["Member", "Shares held", "Entered", "Ceased"]}
-          rows={members.map((m) => [
-            nameOf(m.h),
-            held(m),
-            fmt(m.entered),
-            fmt(m.ceased) || "—",
-          ])}
-        />
+        {authorisedRows.length > 0 && (
+          <div className="mb-6">
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-3">
+              Authorised share capital
+            </h3>
+            <Grid
+              head={[
+                "Class",
+                "Authorised shares",
+                "Par value",
+                "Authorised capital",
+                "Issued",
+                "Not yet issued",
+              ]}
+              rows={authorisedRows.map((r) => [
+                r.shareClass.name,
+                formatShares(r.authorised),
+                par(r) !== null
+                  ? money(par(r)!, r.shareClass.currency)
+                  : "No par value",
+                par(r) !== null
+                  ? money(par(r)! * r.authorised, r.shareClass.currency)
+                  : "—",
+                formatShares(r.issued),
+                formatShares(Math.max(r.authorised - r.issued, 0)),
+              ])}
+            />
+          </div>
+        )}
+        <div className="mb-6">
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-3">
+            At a glance
+          </h3>
+          <Grid
+            head={[
+              "Class",
+              "Certificate",
+              "Member",
+              "Shares",
+              "Issued",
+              "Cancelled",
+            ]}
+            rows={registers.flatMap((r) => {
+              const mine = certs.filter((c) => c.classId === r.shareClass.id);
+              if (mine.length === 0) return [];
+              return [
+                ...mine.map((c) => [
+                  r.shareClass.name,
+                  c.number,
+                  nameOf(c.holder),
+                  formatShares(c.shares),
+                  fmt(c.issuedOn),
+                  c.cancelledOn ? fmt(c.cancelledOn) : "—",
+                ]),
+                [
+                  <strong key="t">Total issued: {r.shareClass.name}</strong>,
+                  "",
+                  "",
+                  <strong key="n">{formatShares(r.issued)}</strong>,
+                  "",
+                  "",
+                ],
+              ];
+            })}
+          />
+        </div>
         <div className="space-y-5">
           {members.map((m) => (
             <Block

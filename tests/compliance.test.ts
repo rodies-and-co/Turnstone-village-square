@@ -1,4 +1,4 @@
-import { registerList } from "@/lib/registers";
+import { certificateHistory, registerList } from "@/lib/registers";
 import { describe, expect, it } from "vitest";
 import { layout } from "@/lib/structure";
 import { addBusinessDays, addMonths, describeRule, entityCalendar, eventMatches, recurringDates, type Obligation } from "@/lib/compliance";
@@ -185,6 +185,35 @@ describe("which registers an entity has", () => {
       "Register of Beneficiaries",
       "Register of Beneficial Owners",
       "Register of Council Members",
+    ]);
+  });
+});
+
+describe("the certificate history for the register of members", () => {
+  const cls = { id: "c", name: "Ordinary", currency: "GBP", par_value: 1, limited: true, voting: true };
+  const pref = { ...cls, id: "p", name: "Preference" };
+  const tx = (o: Partial<import("@/lib/ownership").ShareTransaction>) =>
+    ({ id: "x", class_id: "c", kind: "issue", transaction_date: "2020-01-01", shares: 100, status: "approved", approved_at: null, certificate_number: null, balance_certificate_number: null, to: null, from: null, ...o }) as import("@/lib/ownership").ShareTransaction;
+  const a = { kind: "person" as const, id: "a" };
+  const b = { kind: "person" as const, id: "b" };
+  it("lists every certificate by class then number, with the ones cancelled by a transfer", () => {
+    const list = certificateHistory(
+      [cls, pref],
+      [
+        tx({ kind: "authorise", shares: 1000 }),
+        tx({ class_id: "p", to: b, certificate_number: "1", shares: 5 }),
+        tx({ to: a, certificate_number: "1" }),
+        tx({ to: b, certificate_number: "2", transaction_date: "2020-02-01" }),
+        tx({ kind: "transfer", from: a, to: b, shares: 40, certificate_number: "3", balance_certificate_number: "4", transaction_date: "2021-01-01" }),
+        tx({ to: a, certificate_number: "10", status: "draft" }),
+      ],
+    );
+    expect(list.map((c) => [c.classId, c.number, c.holder.id, c.shares, c.cancelledOn])).toEqual([
+      ["c", "1", "a", 100, "2021-01-01"],
+      ["c", "2", "b", 100, null],
+      ["c", "3", "b", 40, null],
+      ["c", "4", "a", 60, null],
+      ["p", "1", "b", 5, null],
     ]);
   });
 });
