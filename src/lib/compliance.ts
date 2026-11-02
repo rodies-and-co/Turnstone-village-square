@@ -28,6 +28,9 @@ export type ComplianceEntity = {
   year_end_month: number | null;
   year_end_day: number | null;
   status: string;
+  dissolved_on?: string | null;
+  // Filings are tracked from this date (earlier periods aren't shown).
+  track_from: string;
 };
 
 // Something that happened which may need a notice: e.g. a director appointed.
@@ -43,10 +46,12 @@ export type Filing = {
   id: string;
   obligation_key: string;
   due_date: string;
+  period_key: string | null;
   event_key: string | null;
   status: "filed" | "not_applicable";
   done_on: string | null;
   reference: string | null;
+  notes?: string | null;
 };
 
 export type Status = "filed" | "not_applicable" | "overdue" | "due_soon" | "upcoming";
@@ -55,6 +60,7 @@ export type CalendarItem = {
   obligation: Obligation;
   due: string;
   period: string | null; // e.g. "Year ended 31 Mar 2026"
+  periodKey: string | null; // e.g. "2026-03-31": what a filing record is matched by
   event: ComplianceEvent | null;
   status: Status;
   filing: Filing | null;
@@ -71,13 +77,15 @@ const daysIn = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate(
 // A day of a month, kept inside the month (29 Feb becomes 28 Feb in other years).
 export const dayOf = (y: number, m: number, d: number) => iso(y, m, Math.min(d, daysIn(y, m)));
 
+// The same day of the month, months later (kept inside shorter months: 31 Jan
+// + 1 month = 28 Feb). On purpose, the end of a month doesn't move to the end
+// of a longer one (30 Sep + 1 month = 30 Oct): the earlier date is the safer one.
 export function addMonths(date: string, months: number) {
   const [y, m, d] = parts(date);
   const total = y * 12 + (m - 1) + months;
   const ny = Math.floor(total / 12);
   const nm = (total % 12) + 1;
-  // The last day of a month stays the last day (30 Sep + 1 month = 31 Oct).
-  return d === daysIn(y, m) ? iso(ny, nm, daysIn(ny, nm)) : dayOf(ny, nm, d);
+  return dayOf(ny, nm, d);
 }
 
 export function addDays(date: string, days: number) {
@@ -136,50 +144,65 @@ export function describeRule(o: Obligation) {
 // --- The calendar ----------------------------------------------------------------
 
 // The dates a recurring obligation falls due between `from` and `to`, for one
-// entity. Only periods after the entity was registered count.
-export function recurringDates(o: Obligation, e: ComplianceEntity, from: string, to: string): { due: string; period: string | null }[] | string {
+// entity, with the period each is for. Only periods after the entity was
+// registered count:
+// - the first financial year end is at least 6 months after registration
+//   (a first period is rarely shorter; first accounts often have longer);
+// - a fixed-date filing (e.g. a fee by 20 January) starts a month after
+//   registration, and a half-year one (BVI fee) the following year.
+export function recurringDates(o: Obligation, e: Pick<ComplianceEntity, "registered_on" | "year_end_month" | "year_end_day">, from: string, to: string): { due: string; period: string | null; periodKey: string }[] | string {
   const [fy] = parts(from);
   const [ty] = parts(to);
-  const out: { due: string; period: string | null }[] = [];
+  const out: { due: string; period: string | null; periodKey: string }[] = [];
   const reg = e.registered_on;
   for (let y = fy - 2; y <= ty + 1; y += 1) {
     let due: string;
     let period: string | null = null;
+    let periodKey: string;
     if (o.basis === "anniversary") {
       if (!reg) return "Needs the date of registration (on the Overview).";
       const [ry, rm, rd] = parts(reg);
       if (y <= ry) continue;
       const anniversary = dayOf(y, rm, rd);
       period = `Anniversary ${shortDate(anniversary)}`;
+      periodKey = anniversary;
       due = applyOffset(anniversary, o);
     } else if (o.basis === "year_end") {
       if (!e.year_end_month || !e.year_end_day) return "Needs the financial year end (on the Overview).";
       const ye = dayOf(y, e.year_end_month, e.year_end_day);
-      if (reg && ye <= reg) continue;
+      if (reg && ye < addMonths(reg, 6)) continue;
       period = `Year ended ${shortDate(ye)}`;
+      periodKey = ye;
       due = applyOffset(ye, o);
     } else if (o.basis === "fixed_date") {
       due = dayOf(y, o.fixed_month ?? 1, o.fixed_day ?? 1);
       period = String(y);
-      if (reg && due <= reg) continue;
+      periodKey = String(y);
+      if (reg && due < addMonths(reg, 1)) continue;
     } else if (o.basis === "half_year") {
       if (!reg) return "Needs the date of registration (on the Overview).";
       const firstHalf = parts(reg)[1] <= 6;
       due = firstHalf ? dayOf(y, o.fixed_month ?? 5, o.fixed_day ?? 31) : dayOf(y, o.alt_month ?? 11, o.alt_day ?? 30);
       period = String(y);
-      if (due <= reg) continue;
+      periodKey = String(y);
+      if (due < addMonths(reg, 12)) continue;
     } else {
       continue;
     }
-    if (due >= from && due <= to) out.push({ due, period });
+    if (due >= from && due <= to) out.push({ due, period, periodKey });
   }
   return out;
 }
 
 // Does this event call for this obligation?
+// Roles whose holders are beneficial owners of a trust or foundation: a change
+// of them is a change of beneficial owners.
+const BO_ROLES = ["trustee", "protector", "enforcer", "council_member", "general_partner"];
+
 export function eventMatches(o: Obligation, ev: ComplianceEvent) {
   if (o.kind !== "event" || !o.event_type) return false;
-  if (o.event_type === "bo_change") return ev.type === "bo_change" || ev.type === "member_change" || ev.type === "share_issue";
+  if (o.event_type === "bo_change")
+    return ev.type === "bo_change" || ev.type === "member_change" || ev.type === "share_issue" || (ev.type === "officer_change" && BO_ROLES.includes(ev.role ?? ""));
   if (o.event_type === "member_change") return ev.type === "member_change" || ev.type === "share_issue";
   if (o.event_type !== ev.type) return false;
   if (o.event_type === "officer_change" && o.event_roles?.length) return Boolean(ev.role && o.event_roles.includes(ev.role));
@@ -195,10 +218,10 @@ function status(due: string, filing: Filing | null, today: string): Status {
   return "upcoming";
 }
 
-// The calendar for one entity: recurring filings from 12 months ago to 15
-// months ahead, and notices for events in the last 12 months. Filings already
-// marked (filed or not applicable) are matched by obligation and due date,
-// or by obligation and event.
+// The calendar for one entity: recurring filings and notices for events from
+// when filings are tracked (or registration) to 15 months ahead, stopping at
+// dissolution. What has been recorded (filed or not applicable) is matched by
+// obligation and period, or by obligation and event.
 export function entityCalendar(
   e: ComplianceEntity,
   obligations: Obligation[],
@@ -208,9 +231,12 @@ export function entityCalendar(
 ): { items: CalendarItem[]; problems: CalendarProblem[] } {
   const items: CalendarItem[] = [];
   const problems: CalendarProblem[] = [];
-  const from = addMonths(today, -12);
-  const to = addMonths(today, 15);
-  if (e.status === "dissolved") return { items, problems };
+  const from = e.registered_on && e.registered_on > e.track_from ? e.registered_on : e.track_from;
+  let to = addMonths(today, 15);
+  if (e.status === "dissolved") {
+    if (!e.dissolved_on) return { items, problems };
+    to = e.dissolved_on < to ? e.dissolved_on : to;
+  }
 
   for (const o of obligations) {
     if (o.kind === "recurring") {
@@ -220,19 +246,20 @@ export function entityCalendar(
         continue;
       }
       for (const d of dates) {
-        const filing = filings.find((f) => f.obligation_key === o.key && f.event_key === null && f.due_date === d.due) ?? null;
-        items.push({ obligation: o, due: d.due, period: d.period, event: null, status: status(d.due, filing, today), filing });
+        const filing =
+          filings.find((f) => f.obligation_key === o.key && f.event_key === null && (f.period_key ? f.period_key === d.periodKey : f.due_date === d.due)) ?? null;
+        items.push({ obligation: o, due: d.due, period: d.period, periodKey: d.periodKey, event: null, status: status(d.due, filing, today), filing });
       }
     } else {
       const seen = new Set<string>();
       for (const ev of events) {
-        if (ev.date < from || !eventMatches(o, ev)) continue;
+        if (ev.date < from || ev.date > to || !eventMatches(o, ev)) continue;
         // One notice per event, even if it matches in two ways.
         if (seen.has(ev.key)) continue;
         seen.add(ev.key);
         const due = applyOffset(ev.date, o);
         const filing = filings.find((f) => f.obligation_key === o.key && f.event_key === ev.key) ?? null;
-        items.push({ obligation: o, due, period: null, event: ev, status: status(due, filing, today), filing });
+        items.push({ obligation: o, due, period: null, periodKey: null, event: ev, status: status(due, filing, today), filing });
       }
     }
   }

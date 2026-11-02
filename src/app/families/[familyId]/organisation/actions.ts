@@ -55,6 +55,7 @@ function details(form: FormData) {
   const day = text(form, "year_end_day");
   const month = text(form, "year_end_month");
   const registeredOn = text(form, "registered_on");
+  const complianceFrom = text(form, "compliance_from");
   const status = text(form, "status") || "active";
   if ((day && !month) || (!day && month)) return { error: "Please give both the day and the month of the year end, or neither." };
   if (day && month) {
@@ -62,6 +63,7 @@ function details(form: FormData) {
     if (d.getUTCMonth() !== Number(month) - 1) return { error: "That year end date doesn't exist." };
   }
   if (registeredOn && !isDate(registeredOn)) return { error: "Please enter the date as day, month and year." };
+  if (complianceFrom && !isDate(complianceFrom)) return { error: "Please enter the date as day, month and year." };
   const currency = text(form, "base_currency").toUpperCase() || null;
   if (currency && !/^[A-Z]{3}$/.test(currency)) return { error: "The currency should be three letters, e.g. GBP." };
   if (!["active", "dormant", "dissolved"].includes(status)) return { error: "Please choose the status from the list." };
@@ -70,6 +72,7 @@ function details(form: FormData) {
       name: text(form, "name"),
       registration_number: optional(form, "registration_number"),
       registered_on: registeredOn || null,
+      compliance_from: complianceFrom || null,
       activity: optional(form, "activity"),
       year_end_day: day ? Number(day) : null,
       year_end_month: month ? Number(month) : null,

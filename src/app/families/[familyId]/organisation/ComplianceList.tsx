@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ConfirmRemove, SubmitButton } from "@/components/feedback";
 import { Card, Chip, Field, Fold, Notice } from "@/components/ui";
-import { STATUS_LABELS, describeRule, shortDate, type CalendarItem } from "@/lib/compliance";
+import { STATUS_LABELS, addMonths, describeRule, shortDate, type CalendarItem } from "@/lib/compliance";
 import { recordFiling, removeFiling } from "./compliance-actions";
-import type { EntityCalendar } from "./compliance-data";
+import { today, type EntityCalendar } from "./compliance-data";
 
 const GROUPS = [
   ["overdue", "Overdue", "Past the due date and not recorded as filed."],
@@ -53,6 +53,7 @@ function Item({ r, familyId, canEdit, back, showEntity }: { r: Row; familyId: st
             <div className="mt-1 text-sm text-ink">
               {r.filing.status === "filed" ? `Filed ${shortDate(r.filing.done_on!)}` : "Not applicable"}
               {r.filing.reference ? ` · ref. ${r.filing.reference}` : ""}
+              {r.filing.notes ? ` · ${r.filing.notes}` : ""}
             </div>
           )}
         </div>
@@ -67,6 +68,7 @@ function Item({ r, familyId, canEdit, back, showEntity }: { r: Row; familyId: st
             <input type="hidden" name="obligation_key" value={r.obligation.key} />
             <input type="hidden" name="obligation_name" value={r.obligation.name} />
             <input type="hidden" name="due_date" value={r.due} />
+            <input type="hidden" name="period_key" value={r.periodKey ?? ""} />
             <input type="hidden" name="event_key" value={r.event?.key ?? ""} />
             <input type="hidden" name="filing_id" value={r.filing?.id ?? ""} />
             <fieldset>
@@ -85,7 +87,7 @@ function Item({ r, familyId, canEdit, back, showEntity }: { r: Row; familyId: st
             <div className="grid gap-4 sm:grid-cols-3">
               <Field id={`done-${id}`} label="Date filed" name="done_on" type="date" defaultValue={r.filing?.done_on} />
               <Field id={`ref-${id}`} label="Reference" name="reference" defaultValue={r.filing?.reference} />
-              <Field id={`notes-${id}`} label="Notes (why, if it doesn't apply)" name="notes" />
+              <Field id={`notes-${id}`} label="Notes (why, if it doesn't apply)" name="notes" defaultValue={r.filing?.notes} />
             </div>
             <SubmitButton>Save</SubmitButton>
           </form>
@@ -113,8 +115,10 @@ export function ComplianceList({
   const problems = calendars.flatMap((c) => c.problems.map((p) => ({ ...p, entityId: c.entityId, entityName: c.entityName })));
   const noStandard = calendars.filter((c) => !c.standardName);
   const drafts = calendars.filter((c) => c.standardDraft);
-  const doneSince = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const doneSince = addMonths(today(), -12);
+  const failed = calendars.some((c) => c.failed);
 
+  if (failed) return <p className="alert">The filing records couldn&apos;t be read just now, so the calendar isn&apos;t shown. Please reload the page.</p>;
   return (
     <>
       {(problems.length > 0 || noStandard.length > 0 || drafts.length > 0) && (

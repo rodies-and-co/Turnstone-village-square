@@ -30,6 +30,9 @@ export type EntityRow = {
   year_end_month: number | null;
   year_end_day: number | null;
   status: string;
+  dissolved_on: string | null;
+  compliance_from: string | null;
+  created_at: string;
   branch_id: string | null;
 };
 export type Organisation = {
@@ -68,7 +71,9 @@ export async function loadOrganisationData(ctx: FamilyContext) {
   const [ents, orgs, classes, txs, setts, bens, bclasses, bmembers, appts] = await Promise.all([
     db
       .from("entities")
-      .select("id, name, entity_type, jurisdiction, sub_type, registration_number, registered_on, registered_address_id, year_end_month, year_end_day, status, branch_id")
+      .select(
+        "id, name, entity_type, jurisdiction, sub_type, registration_number, registered_on, registered_address_id, year_end_month, year_end_day, status, dissolved_on, compliance_from, created_at, branch_id",
+      )
       .order("name"),
     db.from("outside_organisations").select("id, name, jurisdiction, registration_number, incorporated_on, address_id").order("name"),
     db.from("share_classes").select("id, entity_id, name, currency, par_value, limited, voting, created_at").order("created_at"),

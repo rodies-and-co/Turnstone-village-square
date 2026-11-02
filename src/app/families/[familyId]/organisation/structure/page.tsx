@@ -20,7 +20,8 @@ export default async function StructurePage({ params }: { params: Promise<{ fami
   if (ctx.db) {
     const data = await loadOrganisationData(ctx);
     const { data: people } = await ctx.db.from("people").select("id, full_names, surname, known_as, birth_year");
-    const { nodes, edges } = chartFromData(data, namer(data, displayNames((people ?? []) as PersonSummary[])), familyId);
+    const names = displayNames((people ?? []) as PersonSummary[]);
+    const { nodes, edges } = chartFromData(data, namer(data, names), familyId, new Set(names.keys()));
     content = data.entities.length ? (
       <Card title="Structure chart" description="Solid lines are shareholdings, with the share held. Dashed lines are settlors, founders and family entities acting as trustee or council. Select a box to open it." actions={<PrintButton />}>
         <StructureChart nodes={nodes} edges={edges} title={`Structure chart of the ${familyName}`} />

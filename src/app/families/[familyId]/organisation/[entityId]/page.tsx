@@ -54,6 +54,7 @@ type Entity = {
   standard_id: string | null;
   registration_number: string | null;
   registered_on: string | null;
+  compliance_from: string | null;
   registered_address_id: string | null;
   activity: string | null;
   year_end_month: number | null;
@@ -489,7 +490,7 @@ async function OrganogramTab({
   names: Map<string, string>;
 }) {
   const data = await loadOrganisationData(ctx);
-  const { nodes, edges } = chartFromData(data, namer(data, names), familyId);
+  const { nodes, edges } = chartFromData(data, namer(data, names), familyId, new Set(names.keys()));
   return (
     <Card
       title="Structure chart"

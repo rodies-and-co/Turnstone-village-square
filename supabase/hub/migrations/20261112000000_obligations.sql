@@ -56,7 +56,8 @@ as $$
 declare
   st text;
 begin
-  if auth.uid() is null then
+  -- Set-up scripts, and the copy made for a new version (below).
+  if auth.uid() is null or current_setting('vs.copying_obligations', true) = 'on' then
     return coalesce(new, old);
   end if;
   select s.status into st from public.entity_standards s where s.id = coalesce(new.standard_id, old.standard_id);
@@ -80,6 +81,7 @@ set search_path = ''
 as $$
 begin
   if new.based_on is not null then
+    perform set_config('vs.copying_obligations', 'on', true);
     insert into public.standard_obligations (standard_id, key, name, authority, kind, basis, offset_months, offset_days, business_days,
       fixed_month, fixed_day, alt_month, alt_day, event_type, event_roles, to_confirm, notes, sort)
     select new.id, o.key, o.name, o.authority, o.kind, o.basis, o.offset_months, o.offset_days, o.business_days,
@@ -88,6 +90,7 @@ begin
       o.notes, o.sort
     from public.standard_obligations o where o.standard_id = new.based_on
     on conflict do nothing;
+    perform set_config('vs.copying_obligations', 'off', true);
   end if;
   return new;
 end;

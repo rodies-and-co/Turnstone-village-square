@@ -1,5 +1,5 @@
 import "server-only";
-import { entityCalendar, type CalendarItem, type CalendarProblem, type ComplianceEvent, type Filing, type Obligation } from "@/lib/compliance";
+import { addMonths, entityCalendar, type CalendarItem, type CalendarProblem, type ComplianceEvent, type Filing, type Obligation } from "@/lib/compliance";
 import { APPOINTMENT_ROLES, matchStandard } from "@/lib/entity-checklist";
 import type { FamilyContext } from "@/lib/family-context";
 import type { Holder } from "@/lib/ownership";
@@ -17,6 +17,7 @@ export type EntityCalendar = {
   standardDraft: boolean;
   items: CalendarItem[];
   problems: CalendarProblem[];
+  failed?: boolean; // the filing records couldn't be read
 };
 
 type StandardRow = { id: string; name: string; jurisdiction: string; entity_type: string; sub_type: string; status: string; version: number };
@@ -56,9 +57,9 @@ export function entityEvents(entityId: string, data: OrganisationData, nameOf: (
 
 export async function loadCalendars(ctx: FamilyContext, data: OrganisationData, nameOf: (h: Holder | null) => string, only?: string): Promise<EntityCalendar[]> {
   const entities = data.entities.filter((e) => !only || e.id === only);
-  const [{ data: standardRows }, { data: filingRows }] = await Promise.all([
+  const [{ data: standardRows }, { data: filingRows, error: filingError }] = await Promise.all([
     ctx.supabase.from("entity_standards").select("id, name, jurisdiction, entity_type, sub_type, status, version"),
-    ctx.db!.from("compliance_filings").select("id, entity_id, obligation_key, due_date, event_key, status, done_on, reference"),
+    ctx.db!.from("compliance_filings").select("id, entity_id, obligation_key, due_date, period_key, event_key, status, done_on, reference, notes"),
   ]);
   const standards = (standardRows ?? []) as StandardRow[];
   const matched = new Map(entities.map((e) => [e.id, matchStandard(standards, e)]));
@@ -72,14 +73,17 @@ export async function loadCalendars(ctx: FamilyContext, data: OrganisationData, 
 
   return entities.map((e) => {
     const s = matched.get(e.id) ?? null;
+    // Tracked from the date chosen on the entity, or from 12 months before it
+    // was added here (earlier years are the family's history, not to-dos).
+    const trackFrom = e.compliance_from ?? addMonths(e.created_at.slice(0, 10), -12);
     const { items, problems } = entityCalendar(
-      e,
+      { ...e, track_from: trackFrom },
       s ? obligations.filter((o) => o.standard_id === s.id) : [],
       entityEvents(e.id, data, nameOf),
       filings.filter((f) => f.entity_id === e.id),
       now,
     );
-    return { entityId: e.id, entityName: e.name, standardName: s?.name ?? null, standardDraft: s?.status === "draft", items, problems };
+    return { entityId: e.id, entityName: e.name, standardName: s?.name ?? null, standardDraft: s?.status === "draft", items, problems, failed: Boolean(filingError) };
   });
 }
 

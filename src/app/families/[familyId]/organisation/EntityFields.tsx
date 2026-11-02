@@ -23,6 +23,7 @@ export type EntityValues = {
   sub_type?: string;
   registration_number?: string | null;
   registered_on?: string | null;
+  compliance_from?: string | null;
   activity?: string | null;
   year_end_month?: number | null;
   year_end_day?: number | null;
@@ -182,6 +183,16 @@ export function EntityFields({
         </label>
         <input id="registered_on" name="registered_on" type="date" defaultValue={values.registered_on ?? ""} className="text-input" />
       </div>
+
+      {lockKind && (
+        <div>
+          <label htmlFor="compliance_from" className={label}>
+            Track filings from
+          </label>
+          <input id="compliance_from" name="compliance_from" type="date" defaultValue={values.compliance_from ?? ""} className="text-input" />
+          <p className={hint}>Earlier periods aren&apos;t shown in the compliance calendar. Empty: 12 months before it was added here.</p>
+        </div>
+      )}
 
       <fieldset className="sm:col-span-2 lg:col-span-1">
         <legend className={label}>Financial year end</legend>

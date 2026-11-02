@@ -230,3 +230,18 @@ describe("Entity Standards: the filings calendar (obligations)", () => {
     });
   });
 });
+
+describe("Entity Standards: approving a new version directly", () => {
+  it("copies the obligations even when the new version is approved at once", async () => {
+    await as(hub, await user(USERS.superUser), async (db) => {
+      const { rows } = await db.query(
+        `insert into entity_standards (jurisdiction, entity_type, sub_type, name, status, version, based_on, effective_from)
+         select jurisdiction, entity_type, sub_type, name, 'approved', version + 1, id, current_date from entity_standards
+         where jurisdiction = 'United Kingdom' and sub_type = 'Private company limited by shares' and status = 'approved' returning id`,
+      );
+      expect(await count(db, `select * from standard_obligations where standard_id = '${rows[0].id}'`)).toBe(7);
+      // And the switch used for copying is off again afterwards.
+      await expect(db.query(`update standard_obligations set offset_months = 2 where standard_id = '${rows[0].id}'`)).rejects.toThrow(/only be changed on a draft/);
+    });
+  });
+});

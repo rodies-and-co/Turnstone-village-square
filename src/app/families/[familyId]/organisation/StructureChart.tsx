@@ -10,7 +10,7 @@ const short = (s: string, n = 28) => (s.length > n ? `${s.slice(0, n - 1)}…` :
 // The boxes and lines: every entity, and whoever holds shares in one or
 // settled or founded one. Family entities that act as trustee or council
 // member are linked with a dashed line.
-export function chartFromData(data: OrganisationData, nameOf: (h: Holder | null) => string, familyId: string) {
+export function chartFromData(data: OrganisationData, nameOf: (h: Holder | null) => string, familyId: string, visiblePeople?: Set<string>) {
   const nodes = new Map<string, ChartNode>();
   const edges: ChartEdge[] = [];
   for (const e of data.entities) {
@@ -30,7 +30,8 @@ export function chartFromData(data: OrganisationData, nameOf: (h: Holder | null)
         label: nameOf(h),
         sub: h.kind === "person" ? "Person" : h.kind === "organisation" ? "Service provider" : "Entity",
         kind: h.kind,
-        href: h.kind === "person" ? `/families/${familyId}/tree/${h.id}` : undefined,
+        // Only a link to someone this person may open.
+        href: h.kind === "person" && (!visiblePeople || visiblePeople.has(h.id)) ? `/families/${familyId}/tree/${h.id}` : undefined,
       });
     }
     return key;
@@ -60,9 +61,9 @@ export function StructureChart({ nodes, edges, focus, title }: { nodes: ChartNod
   const label = (n: ChartNode) => part.nodes.find((x) => x.key === n.key)?.label ?? "";
   return (
     <div>
-      <div className="overflow-x-auto rounded-lg border border-border bg-background p-3">
+      <div className="overflow-x-auto rounded-lg border border-border bg-background p-3 print:overflow-visible">
         <svg
-          role="img"
+          role="group"
           aria-labelledby="chart-title"
           width={chart.width + pad * 2}
           height={chart.height + pad * 2}
@@ -70,6 +71,7 @@ export function StructureChart({ nodes, edges, focus, title }: { nodes: ChartNod
           className="block max-w-none"
         >
           <title id="chart-title">{title}</title>
+          <desc>The same information is listed in words below the chart.</desc>
           {chart.edges.map((e, i) => {
             const midY = (e.y1 + e.y2) / 2;
             const d = `M ${e.x1} ${e.y1} C ${e.x1} ${midY}, ${e.x2} ${midY}, ${e.x2} ${e.y2}`;
@@ -77,7 +79,7 @@ export function StructureChart({ nodes, edges, focus, title }: { nodes: ChartNod
             return (
               <g key={i}>
                 <path d={d} fill="none" stroke="var(--color-ink-3, #6b6259)" strokeWidth={1.5} strokeDasharray={e.dashed ? "5 4" : undefined} markerEnd="url(#arrow)" />
-                <rect x={lx - 34} y={midY - 11} width={68} height={22} rx={11} fill="var(--color-card, #f2ece3)" stroke="var(--color-border, #e3d8c9)" />
+                <rect x={lx - (e.label.length * 7 + 20) / 2} y={midY - 11} width={e.label.length * 7 + 20} height={22} rx={11} fill="var(--color-card, #f2ece3)" stroke="var(--color-border, #e3d8c9)" />
                 <text x={lx} y={midY + 4} textAnchor="middle" fontSize={12} fill="currentColor" className="text-ink">
                   {e.label}
                 </text>
@@ -122,12 +124,13 @@ export function StructureChart({ nodes, edges, focus, title }: { nodes: ChartNod
         </svg>
       </div>
       {/* The same information in words, for screen readers and printing. */}
-      <details className="fold mt-3">
-        <summary>The chart in words</summary>
-        <ul className="mt-2 space-y-1 text-sm text-ink">
-          {part.edges.map((e, i) => {
+      <div className="mt-3">
+        <h3 className="text-sm font-semibold text-ink">The chart in words</h3>
+        <ul className="mt-1 space-y-1 text-sm text-ink">
+          {chart.edges.map((e, i) => {
             const from = part.nodes.find((n) => n.key === e.from);
             const to = part.nodes.find((n) => n.key === e.to);
+            if (!from || !to) return null;
             const linkTo = to?.href ? <Link href={to.href} className="underline decoration-border underline-offset-4">{to.label}</Link> : to?.label;
             return (
               <li key={i}>
@@ -136,7 +139,7 @@ export function StructureChart({ nodes, edges, focus, title }: { nodes: ChartNod
             );
           })}
         </ul>
-      </details>
+      </div>
     </div>
   );
 }
