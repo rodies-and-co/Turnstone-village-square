@@ -871,7 +871,11 @@ alter table public.appointments
   add column basis text check (basis in ('decision', 'formation', 'instrument', 'earlier')),
   add column basis_note text;
 
+-- Approved transactions are otherwise locked, so their lock is lifted for
+-- this one change only.
+alter table public.share_transactions disable trigger share_transactions_rules;
 update public.share_transactions set basis = 'earlier' where status = 'approved';
+alter table public.share_transactions enable trigger share_transactions_rules;
 update public.appointments set basis = 'earlier';
 
 -- The entity a decision was made for (its board's or members'), or null.
