@@ -914,3 +914,234 @@ describe("Review fixes", () => {
     });
   });
 });
+
+describe("Changes that follow a decision", () => {
+  const passResolution = async (db: Client, w: string) => {
+    for (const p of [NORTH, SOUTH])
+      await db.query(
+        "insert into resolution_signatories (resolution_id, person_id) values ($1, $2)",
+        [w, p],
+      );
+    await db.query(
+      "update written_resolutions set status = 'circulated', circulated_on = current_date - 3 where id = $1",
+      [w],
+    );
+    await db.query(
+      "update resolution_signatories set signed_on = current_date - 1 where resolution_id = $1",
+      [w],
+    );
+    await switchUser(db, hub, MANAGER);
+    await db.query(
+      "update written_resolutions set status = 'passed' where id = $1",
+      [w],
+    );
+  };
+
+  it("an appointment drafted into a written resolution is recorded when it passes", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const w = (
+        await one(
+          db,
+          "insert into written_resolutions (body, entity_id, title) values ('board', $1, 'Secretary') returning id",
+          [HOLDINGS],
+        )
+      ).id;
+      await db.query(
+        "insert into decisions (resolution_id, item, title, wording, action, proposed) values ($1, 1, 'Appointment', 'That … be appointed secretary.', 'appoint', $2)",
+        [w, JSON.stringify({ role: "secretary", person_id: OWN })],
+      );
+      expect(
+        await count(db, "select * from appointments where person_id = $1", [
+          OWN,
+        ]),
+      ).toBe(0);
+      await passResolution(db, w);
+      expect(
+        await one(
+          db,
+          "select role, basis, appointed_on = current_date - 1 as on_pass from appointments where person_id = $1",
+          [OWN],
+        ),
+      ).toEqual({
+        role: "secretary",
+        basis: "decision",
+        on_pass: true,
+      });
+    });
+  });
+
+  it("a removal carried at a confirmed meeting ends the appointment on the meeting date; one not carried changes nothing", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      await db.query(
+        "update entities set board_quorum_rule = 'majority' where id = $1",
+        [HOLDINGS],
+      );
+      const appt = (
+        await one(
+          db,
+          "select id from appointments where entity_id = $1 and person_id = $2",
+          [HOLDINGS, SOUTH],
+        )
+      ).id;
+      const { m, d } = await heldBoardMeeting(db);
+      await db.query("update decisions set outcome = 'carried' where id = $1", [
+        d,
+      ]);
+      const r = (
+        await one(
+          db,
+          "insert into decisions (meeting_id, item, title, wording, action, appointment_id) values ($1, 2, 'Removal', 'w', 'end_appointment', $2) returning id",
+          [m, appt],
+        )
+      ).id;
+      await refused(
+        db,
+        "update decisions set appointment_id = null where id = $1",
+        [r],
+        /can't be altered/,
+      );
+      await db.query("update decisions set outcome = 'carried' where id = $1", [
+        r,
+      ]);
+      await switchUser(db, hub, MANAGER);
+      await db.query("update meetings set status = 'confirmed' where id = $1", [
+        m,
+      ]);
+      expect(
+        (
+          await one(
+            db,
+            "select ceased_on = current_date - 1 as ok from appointments where id = $1",
+            [appt],
+          )
+        ).ok,
+      ).toBe(true);
+    });
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      await db.query(
+        "update entities set board_quorum_rule = 'majority' where id = $1",
+        [HOLDINGS],
+      );
+      const appt = (
+        await one(
+          db,
+          "select id from appointments where entity_id = $1 and person_id = $2",
+          [HOLDINGS, SOUTH],
+        )
+      ).id;
+      const { m, d } = await heldBoardMeeting(db);
+      await db.query(
+        "update decisions set outcome = 'not_carried', action = null where id = $1",
+        [d],
+      );
+      await db.query(
+        "insert into decisions (meeting_id, item, title, wording, action, appointment_id, outcome) values ($1, 2, 'Removal', 'w', 'end_appointment', $2, 'not_carried')",
+        [m, appt],
+      );
+      await switchUser(db, hub, MANAGER);
+      await db.query("update meetings set status = 'confirmed' where id = $1", [
+        m,
+      ]);
+      expect(
+        (
+          await one(db, "select ceased_on from appointments where id = $1", [
+            appt,
+          ])
+        ).ceased_on,
+      ).toBeNull();
+    });
+  });
+
+  it("a share transaction drafted for a resolution goes on the register when it passes, dated the day it passed", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const w = (
+        await one(
+          db,
+          "insert into written_resolutions (body, entity_id, title) values ('board', $1, 'Allotment') returning id",
+          [HOLDINGS],
+        )
+      ).id;
+      const d = (
+        await one(
+          db,
+          "insert into decisions (resolution_id, item, title, wording, action) values ($1, 1, 'Allotment', 'w', 'share_transaction') returning id",
+          [w],
+        )
+      ).id;
+      await db.query(
+        "update share_transactions set basis = 'decision', decision_id = $2, transaction_date = current_date - 10 where id = $1",
+        [DRAFT_ISSUE, d],
+      );
+      await passResolution(db, w);
+      expect(
+        await one(
+          db,
+          "select status, transaction_date = current_date - 1 as on_pass from share_transactions where id = $1",
+          [DRAFT_ISSUE],
+        ),
+      ).toEqual({
+        status: "approved",
+        on_pass: true,
+      });
+    });
+  });
+
+  it("a resignation is noted, not decided, once it has been recorded; governance bodies don't change officers", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const appt = (
+        await one(
+          db,
+          "select id from appointments where entity_id = $1 and person_id = $2",
+          [HOLDINGS, SOUTH],
+        )
+      ).id;
+      const m = (
+        await one(
+          db,
+          "insert into meetings (body, entity_id, title, meeting_on) values ('board', $1, 'Board', current_date) returning id",
+          [HOLDINGS],
+        )
+      ).id;
+      await refused(
+        db,
+        "insert into decisions (meeting_id, item, title, wording, action, appointment_id, outcome) values ($1, 1, 'Resignation', 'w', 'note_resignation', $2, 'noted')",
+        [m, appt],
+        /record the resignation/,
+      );
+      await db.query(
+        "update appointments set ceased_on = current_date - 2 where id = $1",
+        [appt],
+      );
+      await db.query(
+        "insert into decisions (meeting_id, item, title, wording, action, appointment_id, outcome) values ($1, 1, 'Resignation', 'The board noted the resignation.', 'note_resignation', $2, 'noted')",
+        [m, appt],
+      );
+      const g = (
+        await one(
+          db,
+          "insert into meetings (body, governance_body_id, title, meeting_on) values ('governance', $1, 'Council', current_date) returning id",
+          [COUNCIL],
+        )
+      ).id;
+      await refused(
+        db,
+        "insert into decisions (meeting_id, item, title, wording, action, proposed) values ($1, 1, 't', 'w', 'appoint', $2)",
+        [g, JSON.stringify({ role: "director", person_id: OWN })],
+        /board or members/,
+      );
+      const w = (
+        await one(
+          db,
+          "insert into written_resolutions (body, entity_id, title) values ('board', $1, 'x') returning id",
+          [HOLDINGS],
+        )
+      ).id;
+      await refused(
+        db,
+        "insert into decisions (resolution_id, item, title, wording, outcome) values ($1, 1, 't', 'w', 'noted')",
+        [w],
+        /check constraint|written resolution/,
+      );
+    });
+  });
+});

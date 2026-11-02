@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { signOut } from "@/app/actions";
+import { MenuSection } from "@/components/MenuSection";
 import { MobileMenu } from "@/components/MobileMenu";
 
 // The frame around every signed-in page, in The Family Square's layout: a
@@ -10,26 +11,52 @@ import { MobileMenu } from "@/components/MobileMenu";
 
 export type Crumb = [text: string, href?: string];
 
-type Section = "family-overview" | "tree" | "branches" | "organisation" | "meetings" | "standards" | null;
+type Section =
+  | "family-overview"
+  | "tree"
+  | "branches"
+  | "organisation"
+  | "meetings"
+  | "standards"
+  | null;
 
 // The plan's areas. Built ones are links (with their section and address
 // within the family); the rest say "later".
 type Item = string | [text: string, section: Section, path: string];
 const LATER_GROUPS: [string, Item[]][] = [
-  ["Things to do", [["Meetings & resolutions", "meetings", "/meetings"], "Projects", "Distributions", "Share transactions", "Risk management"]],
+  [
+    "Things to do",
+    [
+      ["Meetings & resolutions", "meetings", "/meetings"],
+      "Projects",
+      "Distributions",
+      "Share transactions",
+      "Risk management",
+    ],
+  ],
   ["Organising", ["To-do list", "Calendar", "Compliance calendar"]],
   ["Reports", ["Registers & charts", "Timeline", "Risk heat map"]],
   ["Village Square", ["Help", "Ask the Elder", "Circles of advisors"]],
   ["Investments", ["Portfolios & properties"]],
 ];
 
-function NavLink({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
+function NavLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: ReactNode;
+}) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
       className={`flex min-h-11 items-center rounded-md border-l-2 px-3 text-[15px] ${
-        active ? "border-primary bg-card font-medium text-ink" : "border-transparent text-ink-2 hover:bg-muted hover:text-ink"
+        active
+          ? "border-primary bg-card font-medium text-ink"
+          : "border-transparent text-ink-2 hover:bg-muted hover:text-ink"
       }`}
     >
       {children}
@@ -59,7 +86,11 @@ export function AppShell({
   user: { name?: string; roleLabel?: string | null; hasTwoFactor?: boolean };
   children: ReactNode;
 }) {
-  const familyName = family ? (/family$/i.test(family.name.trim()) ? family.name : `${family.name} family`) : null;
+  const familyName = family
+    ? /family$/i.test(family.name.trim())
+      ? family.name
+      : `${family.name} family`
+    : null;
 
   const menu = (
     <div className="flex h-full flex-col gap-6">
@@ -74,55 +105,69 @@ export function AppShell({
         <nav aria-label="Family sections" className="space-y-5">
           <ul>
             <li>
-              <NavLink href={`/families/${family.id}`} active={section === "family-overview"}>
+              <NavLink
+                href={`/families/${family.id}`}
+                active={section === "family-overview"}
+              >
                 Overview
               </NavLink>
             </li>
           </ul>
-          <div>
-            <p className="mb-1 px-1 font-semibold text-ink">Recording the facts</p>
-            <ul>
-              <li>
-                <NavLink href={`/families/${family.id}/tree`} active={section === "tree"}>
-                  The Tree
-                </NavLink>
-              </li>
-              <li>
-                <NavLink href={`/families/${family.id}/branches`} active={section === "branches"}>
-                  The Branches
-                </NavLink>
-              </li>
-              <li>
-                <NavLink href={`/families/${family.id}/organisation`} active={section === "organisation"}>
-                  The Organisation
-                </NavLink>
-              </li>
-              <Later>The Story</Later>
-              <Later>The Vault</Later>
-            </ul>
-          </div>
-          {/* The other areas fold away, so the menu stays short. Only one opens
-              at a time: opening one closes the others (they share a name). The
-              area of the page being shown starts open. */}
+          {/* Every section folds away, so the menu stays short. Only one is
+              open at a time: opening one closes the others. The section of the
+              page being shown starts open. */}
           <div className="space-y-1">
+            <MenuSection
+              title="Recording the facts"
+              open={
+                section === "tree" ||
+                section === "branches" ||
+                section === "organisation"
+              }
+            >
+              <ul className="pb-2">
+                <li>
+                  <NavLink
+                    href={`/families/${family.id}/tree`}
+                    active={section === "tree"}
+                  >
+                    The Tree
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    href={`/families/${family.id}/branches`}
+                    active={section === "branches"}
+                  >
+                    The Branches
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    href={`/families/${family.id}/organisation`}
+                    active={section === "organisation"}
+                  >
+                    The Organisation
+                  </NavLink>
+                </li>
+                <Later>The Story</Later>
+                <Later>The Vault</Later>
+              </ul>
+            </MenuSection>
             {LATER_GROUPS.map(([group, items]) => (
-              <details
+              <MenuSection
                 key={group}
-                name="side-menu-areas"
-                className="group"
-                open={items.some((i) => Array.isArray(i) && i[1] === section) || undefined}
+                title={group}
+                open={items.some((i) => Array.isArray(i) && i[1] === section)}
               >
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-1 font-semibold text-ink-2 hover:bg-muted [&::-webkit-details-marker]:hidden">
-                  {group}
-                  <span aria-hidden="true" className="text-sm transition-transform group-open:rotate-90">
-                    ›
-                  </span>
-                </summary>
                 <ul className="pb-2">
                   {items.map((i) =>
                     Array.isArray(i) ? (
                       <li key={i[0]}>
-                        <NavLink href={`/families/${family.id}${i[2]}`} active={section === i[1]}>
+                        <NavLink
+                          href={`/families/${family.id}${i[2]}`}
+                          active={section === i[1]}
+                        >
                           {i[0]}
                         </NavLink>
                       </li>
@@ -131,7 +176,7 @@ export function AppShell({
                     ),
                   )}
                 </ul>
-              </details>
+              </MenuSection>
             ))}
           </div>
         </nav>
@@ -144,15 +189,24 @@ export function AppShell({
         <NavLink href="/standards" active={section === "standards"}>
           Entity Standards
         </NavLink>
-        {!user.hasTwoFactor && <NavLink href="/mfa" active={false}>Set up two-factor</NavLink>}
+        {!user.hasTwoFactor && (
+          <NavLink href="/mfa" active={false}>
+            Set up two-factor
+          </NavLink>
+        )}
         {user.name && (
           <div className="px-3 pt-2">
             <p className="text-sm font-semibold text-ink">{user.name}</p>
-            {user.roleLabel && <p className="text-sm text-ink-3">{user.roleLabel}</p>}
+            {user.roleLabel && (
+              <p className="text-sm text-ink-3">{user.roleLabel}</p>
+            )}
           </div>
         )}
         <form action={signOut}>
-          <button type="submit" className="btn-quiet w-full justify-start px-3 text-[15px]">
+          <button
+            type="submit"
+            className="btn-quiet w-full justify-start px-3 text-[15px]"
+          >
             Sign out
           </button>
         </form>
@@ -168,8 +222,14 @@ export function AppShell({
             {/* The Turnstone logo: public/Turnstone-Logo.jpg */}
             {/* "multiply" lets the logo's white background take the page colour. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/Turnstone-Logo.jpg" alt="Turnstone" className="h-12 w-auto mix-blend-multiply md:h-[4.5rem]" />
-            <span className="mt-2 block text-[19px] font-semibold tracking-tight text-ink">Village Square</span>
+            <img
+              src="/Turnstone-Logo.jpg"
+              alt="Turnstone"
+              className="h-12 w-auto mix-blend-multiply md:h-[4.5rem]"
+            />
+            <span className="mt-2 block text-[19px] font-semibold tracking-tight text-ink">
+              Village Square
+            </span>
           </Link>
           <MobileMenu>{menu}</MobileMenu>
         </div>
@@ -184,7 +244,10 @@ export function AppShell({
                 <li key={i} className="flex items-center gap-2">
                   {i > 0 && <span aria-hidden="true">/</span>}
                   {href ? (
-                    <Link href={href} className="inline-flex min-h-11 items-center hover:underline">
+                    <Link
+                      href={href}
+                      className="inline-flex min-h-11 items-center hover:underline"
+                    >
                       {text}
                     </Link>
                   ) : (
@@ -217,13 +280,20 @@ export function PageTitle({
   actions?: ReactNode;
 }) {
   return (
-    <div data-page-title className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div
+      data-page-title
+      className="mb-6 flex flex-wrap items-end justify-between gap-4"
+    >
       <div className="min-w-0">
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-        <h1 className="mt-1 text-[28px] leading-tight font-semibold text-ink sm:text-[30px]">{title}</h1>
+        <h1 className="mt-1 text-[28px] leading-tight font-semibold text-ink sm:text-[30px]">
+          {title}
+        </h1>
         {subtitle && <p className="mt-1 text-ink-2">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2 print:hidden">{actions}</div>}
+      {actions && (
+        <div className="flex flex-wrap gap-2 print:hidden">{actions}</div>
+      )}
     </div>
   );
 }

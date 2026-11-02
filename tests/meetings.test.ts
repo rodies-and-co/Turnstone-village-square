@@ -76,3 +76,63 @@ describe("meetings: words and small rules", () => {
     );
   });
 });
+
+describe("drafted wording", () => {
+  it("writes the decision for officer and share changes", async () => {
+    const {
+      appointWording,
+      removalWording,
+      resignationWording,
+      shareWording,
+      parseTarget,
+    } = await import("@/lib/meetings");
+    expect(
+      appointWording({ name: "Pieter Visser", role: "Director" }).wording,
+    ).toBe(
+      "That Pieter Visser be appointed as director, with effect from the date of this decision, and that the register be updated.",
+    );
+    expect(
+      removalWording({
+        name: "Hans Visser",
+        role: "Director",
+        from: "2026-12-01",
+      }).wording,
+    ).toMatch(/removed as director with effect from 1 December 2026/);
+    expect(
+      resignationWording({
+        name: "Hans Visser",
+        role: "Director",
+        on: "2026-11-01",
+        inMeeting: true,
+        board: "Board of directors",
+      }).wording,
+    ).toBe(
+      "The board of directors noted the resignation of Hans Visser as director on 1 November 2026.",
+    );
+    expect(
+      resignationWording({
+        name: "Hans Visser",
+        role: "Director",
+        on: "2026-11-01",
+        inMeeting: false,
+        board: "Board of directors",
+      }).wording,
+    ).toBe(
+      "That the resignation of Hans Visser as director on 1 November 2026 be noted.",
+    );
+    expect(
+      shareWording({
+        kind: "transfer",
+        shares: 5000,
+        className: "Ordinary",
+        from: "A",
+        to: "B",
+      }).title,
+    ).toBe("Transfer of 5,000 Ordinary shares");
+    expect(parseTarget("new_resolution:board")).toEqual({
+      kind: "new_resolution",
+      body: "board",
+    });
+    expect(parseTarget("meeting:not-an-id")).toBeNull();
+  });
+});

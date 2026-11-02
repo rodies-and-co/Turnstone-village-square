@@ -19,7 +19,9 @@ import { formatDate } from "@/lib/governance";
 import {
   MEETING_STATUS,
   MINUTES_STATUS,
+  MEETING_OUTCOMES,
   OUTCOMES,
+  actionText,
   quorumText,
 } from "@/lib/meetings";
 import { errorMessage, savedMessage } from "@/lib/messages";
@@ -574,6 +576,11 @@ export default async function MeetingPage({
                       </p>
                     )}
                     <p className="whitespace-pre-wrap text-ink">{d.wording}</p>
+                    {actionText(d.action, true) && (
+                      <p className="text-sm text-ink-2">
+                        {actionText(d.action, true)}
+                      </p>
+                    )}
                     {(d.votes_for !== null ||
                       d.votes_against !== null ||
                       d.abstentions !== null) && (
@@ -584,59 +591,61 @@ export default async function MeetingPage({
                     )}
                     {editable && (
                       <div className="flex flex-wrap items-start gap-3">
-                        <Fold label="Record how it went">
-                          <form
-                            action={setOutcome.bind(
-                              null,
-                              familyId,
-                              "meeting",
-                              meetingId,
-                              d.id,
-                            )}
-                            className="space-y-3"
-                          >
-                            <Select
-                              id={`outcome-${d.id}`}
-                              label="Outcome"
-                              name="outcome"
-                              defaultValue={d.outcome}
-                              options={
-                                m.status === "held"
-                                  ? OUTCOMES
-                                  : {
-                                      proposed: "Proposed",
-                                      withdrawn: "Withdrawn",
-                                    }
-                              }
-                              hint={
-                                m.status === "held"
-                                  ? undefined
-                                  : "Carried or not carried is recorded once the meeting is held."
-                              }
-                            />
-                            <div className="grid gap-3 sm:grid-cols-3">
-                              <Field
-                                id={`for-${d.id}`}
-                                label="For"
-                                name="votes_for"
-                                defaultValue={d.votes_for}
+                        {d.outcome !== "noted" && (
+                          <Fold label="Record how it went">
+                            <form
+                              action={setOutcome.bind(
+                                null,
+                                familyId,
+                                "meeting",
+                                meetingId,
+                                d.id,
+                              )}
+                              className="space-y-3"
+                            >
+                              <Select
+                                id={`outcome-${d.id}`}
+                                label="Outcome"
+                                name="outcome"
+                                defaultValue={d.outcome}
+                                options={
+                                  m.status === "held"
+                                    ? MEETING_OUTCOMES
+                                    : {
+                                        proposed: "Proposed",
+                                        withdrawn: "Withdrawn",
+                                      }
+                                }
+                                hint={
+                                  m.status === "held"
+                                    ? undefined
+                                    : "Carried or not carried is recorded once the meeting is held."
+                                }
                               />
-                              <Field
-                                id={`against-${d.id}`}
-                                label="Against"
-                                name="votes_against"
-                                defaultValue={d.votes_against}
-                              />
-                              <Field
-                                id={`abst-${d.id}`}
-                                label="Abstained"
-                                name="abstentions"
-                                defaultValue={d.abstentions}
-                              />
-                            </div>
-                            <SubmitButton>Save the outcome</SubmitButton>
-                          </form>
-                        </Fold>
+                              <div className="grid gap-3 sm:grid-cols-3">
+                                <Field
+                                  id={`for-${d.id}`}
+                                  label="For"
+                                  name="votes_for"
+                                  defaultValue={d.votes_for}
+                                />
+                                <Field
+                                  id={`against-${d.id}`}
+                                  label="Against"
+                                  name="votes_against"
+                                  defaultValue={d.votes_against}
+                                />
+                                <Field
+                                  id={`abst-${d.id}`}
+                                  label="Abstained"
+                                  name="abstentions"
+                                  defaultValue={d.abstentions}
+                                />
+                              </div>
+                              <SubmitButton>Save the outcome</SubmitButton>
+                            </form>
+                          </Fold>
+                        )}
                         <Fold label="Change the wording">
                           <form
                             action={updateDecision.bind(

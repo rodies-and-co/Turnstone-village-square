@@ -6,8 +6,19 @@ import { matchStandard } from "@/lib/entity-checklist";
 import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
-import { INTERESTS, TRANSACTION_KINDS, holderColumns, holderFrom } from "@/lib/ownership";
-import { parseBasis } from "@/lib/meetings";
+import {
+  INTERESTS,
+  TRANSACTION_KINDS,
+  holderColumns,
+  holderFrom,
+} from "@/lib/ownership";
+import {
+  parseBasis,
+  parseTarget,
+  shareWording,
+  type Target,
+} from "@/lib/meetings";
+import { draftDecision } from "../meetings/draft";
 import { friendlyError } from "@/lib/people";
 import { askToRemove } from "@/lib/removal";
 
@@ -17,14 +28,25 @@ import { askToRemove } from "@/lib/removal";
 // transaction approves it; removing takes two people (see src/lib/removal.ts). The family database checks
 // all of this too.
 
-const ORG_KINDS = ["trust_company", "registered_agent", "corporate_services", "management_company", "law_firm", "accounting_firm", "bank", "company", "other"];
+const ORG_KINDS = [
+  "trust_company",
+  "registered_agent",
+  "corporate_services",
+  "management_company",
+  "law_firm",
+  "accounting_firm",
+  "bank",
+  "company",
+  "other",
+];
 
 function go(path: string, error?: string, saved: SavedCode = "saved"): never {
   revalidatePath(path.split("?")[0], "layout");
   const params = new URLSearchParams(error ? { error } : { saved });
   redirect(`${path}${path.includes("?") ? "&" : "?"}${params.toString()}`);
 }
-const back = (familyId: string, entityId: string) => `/families/${familyId}/organisation/${entityId}?tab=ownership`;
+const back = (familyId: string, entityId: string) =>
+  `/families/${familyId}/organisation/${entityId}?tab=ownership`;
 
 function text(form: FormData, name: string) {
   const v = form.get(name);
@@ -35,30 +57,98 @@ const optional = (form: FormData, name: string) => text(form, name) || null;
 function ownershipError(message: string | undefined) {
   const m = message ?? "";
   // The database's own checks on shares explain themselves.
-  if (/^(Shares|Ownership|Appointments): /.test(m)) return m.replace(/^(Shares|Ownership|Appointments): /, "");
-  if (/share_classes_name/.test(m)) return "There is already a share class with that name.";
-  if (/beneficiary_classes_name/.test(m)) return "There is already a class with that name.";
-  if (/beneficiary_class_members_current/.test(m)) return "They are already in that class.";
-  if (/beneficiaries_current/.test(m)) return "That beneficiary is already recorded.";
-  if (/outside_organisations_name/.test(m)) return "There is already an outside organisation with that name. Choose it from the list instead.";
+  if (/^(Shares|Ownership|Appointments): /.test(m))
+    return m.replace(/^(Shares|Ownership|Appointments): /, "");
+  if (/share_classes_name/.test(m))
+    return "There is already a share class with that name.";
+  if (/beneficiary_classes_name/.test(m))
+    return "There is already a class with that name.";
+  if (/beneficiary_class_members_current/.test(m))
+    return "They are already in that class.";
+  if (/beneficiaries_current/.test(m))
+    return "That beneficiary is already recorded.";
+  if (/outside_organisations_name/.test(m))
+    return "There is already an outside organisation with that name. Choose it from the list instead.";
   return friendlyError(m);
 }
 
-const whole = (s: string) => /^\d{1,15}$/.test(s.replace(/[ ,]/g, "")) && Number(s.replace(/[ ,]/g, "")) > 0;
-const amount = (s: string) => /^\d{1,14}(\.\d{1,6})?$/.test(s.replace(/[ ,]/g, ""));
+const whole = (s: string) =>
+  /^\d{1,15}$/.test(s.replace(/[ ,]/g, "")) &&
+  Number(s.replace(/[ ,]/g, "")) > 0;
+const amount = (s: string) =>
+  /^\d{1,14}(\.\d{1,6})?$/.test(s.replace(/[ ,]/g, ""));
 const num = (s: string) => Number(s.replace(/[ ,]/g, ""));
 
 type Ctx = Awaited<ReturnType<typeof getFamilyContext>>;
 
+async function nameOfHolder(
+  ctx: Ctx,
+  cols: Record<string, string | null>,
+  prefix: "to_" | "from_",
+) {
+  const db = ctx.db!;
+  if (cols[`${prefix}person_id`]) {
+    const { data } = await db
+      .from("people")
+      .select("full_names, surname")
+      .eq("id", cols[`${prefix}person_id`]!)
+      .maybeSingle();
+    return data ? `${data.full_names} ${data.surname}` : "the person named";
+  }
+  if (cols[`${prefix}organisation_id`]) {
+    const { data } = await db
+      .from("outside_organisations")
+      .select("name")
+      .eq("id", cols[`${prefix}organisation_id`]!)
+      .maybeSingle();
+    return data?.name ?? "the organisation named";
+  }
+  const { data } = await db
+    .from("entities")
+    .select("name")
+    .eq("id", cols[`${prefix}entity_id`] ?? "")
+    .maybeSingle();
+  return data?.name ?? "the entity named";
+}
+
+// Drafts the decision for a share transaction (in the meeting or written
+// resolution chosen) and links the draft transaction to it: it goes on the
+// register by itself once the decision passes.
+async function draftForTransaction(
+  ctx: Ctx,
+  entityId: string,
+  transactionId: string,
+  target: Target,
+  words: { title: string; wording: string },
+) {
+  const made = await draftDecision(ctx, entityId, target, {
+    ...words,
+    action: "share_transaction",
+  });
+  if ("error" in made) return made;
+  const { error } = await ctx
+    .db!.from("share_transactions")
+    .update({ basis: "decision", decision_id: made.decisionId })
+    .eq("id", transactionId)
+    .eq("status", "draft");
+  return error ? { error: ownershipError(error.message) } : made;
+}
+
 // The holder chosen in a form ("person:<id>", "entity:<id>",
 // "organisation:<id>", or "new" with a new organisation's name and kind).
-async function chosenHolder(ctx: Ctx, form: FormData, field: string, prefix: "to_" | "from_" | "") {
+async function chosenHolder(
+  ctx: Ctx,
+  form: FormData,
+  field: string,
+  prefix: "to_" | "from_" | "",
+) {
   const choice = text(form, field);
   if (choice === "new") {
     const name = text(form, `${field}_new_name`);
     const kind = text(form, `${field}_new_kind`) || "company";
     if (!name) return { error: "Please type the new organisation's name." };
-    if (!ORG_KINDS.includes(kind)) return { error: "Please choose what kind of organisation it is." };
+    if (!ORG_KINDS.includes(kind))
+      return { error: "Please choose what kind of organisation it is." };
     const { data, error } = await ctx
       .db!.from("outside_organisations")
       .insert({
@@ -78,19 +168,28 @@ async function chosenHolder(ctx: Ctx, form: FormData, field: string, prefix: "to
 
 async function editor(familyId: string, entityId: string) {
   const ctx = await getFamilyContext(familyId);
-  if (!ctx.db || !ctx.canEdit) go(back(familyId, entityId), "You don't have permission to change this entity.");
+  if (!ctx.db || !ctx.canEdit)
+    go(
+      back(familyId, entityId),
+      "You don't have permission to change this entity.",
+    );
   return ctx;
 }
 async function manager(familyId: string, entityId: string, what: string) {
   const ctx = await getFamilyContext(familyId);
-  if (!ctx.db || !ctx.canManage) go(back(familyId, entityId), `Only a Manager can ${what}.`);
+  if (!ctx.db || !ctx.canManage)
+    go(back(familyId, entityId), `Only a Manager can ${what}.`);
   return ctx;
 }
 
 // ---------------------------------------------------------------------------
 // Share classes and transactions
 
-export async function addShareClass(familyId: string, entityId: string, form: FormData) {
+export async function addShareClass(
+  familyId: string,
+  entityId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
   const name = text(form, "name");
@@ -98,51 +197,132 @@ export async function addShareClass(familyId: string, entityId: string, form: Fo
   const par = text(form, "par_value");
   const authorised = text(form, "authorised");
   // The Entity Standard decides whether a maximum number of shares must be set.
-  const { data: ent } = await ctx.db!.from("entities").select("jurisdiction, entity_type, sub_type").eq("id", entityId).maybeSingle();
-  const { data: stds } = await ctx.supabase.from("entity_standards").select("jurisdiction, entity_type, sub_type, status, version, authorised_capital");
-  const standard = ent ? matchStandard((stds ?? []) as { jurisdiction: string; entity_type: string; sub_type: string; status: string; version: number; authorised_capital: string }[], ent) : null;
+  const { data: ent } = await ctx
+    .db!.from("entities")
+    .select("jurisdiction, entity_type, sub_type")
+    .eq("id", entityId)
+    .maybeSingle();
+  const { data: stds } = await ctx.supabase
+    .from("entity_standards")
+    .select(
+      "jurisdiction, entity_type, sub_type, status, version, authorised_capital",
+    );
+  const standard = ent
+    ? matchStandard(
+        (stds ?? []) as {
+          jurisdiction: string;
+          entity_type: string;
+          sub_type: string;
+          status: string;
+          version: number;
+          authorised_capital: string;
+        }[],
+        ent,
+      )
+    : null;
   const rule = standard?.authorised_capital ?? "optional";
-  const limited = rule === "required" || (rule === "optional" && form.get("limited") === "on");
+  const limited =
+    rule === "required" ||
+    (rule === "optional" && form.get("limited") === "on");
   if (!name) go(to, "Please name the class, e.g. Ordinary.");
-  if (!/^[A-Z]{3}$/.test(currency)) go(to, "The currency should be three letters, e.g. GBP.");
-  if (par && !amount(par)) go(to, "The par value should be a number, e.g. 1 or 0.01.");
-  if (authorised && !whole(authorised)) go(to, "The number of authorised shares should be a whole number.");
+  if (!/^[A-Z]{3}$/.test(currency))
+    go(to, "The currency should be three letters, e.g. GBP.");
+  if (par && !amount(par))
+    go(to, "The par value should be a number, e.g. 1 or 0.01.");
+  if (authorised && !whole(authorised))
+    go(to, "The number of authorised shares should be a whole number.");
   if (limited && !authorised)
-    go(to, rule === "required" ? "This kind of company must have a maximum number of shares: please give the number authorised." : "Please give the number of shares authorised, or untick the maximum.");
-  const basis = limited && authorised ? parseBasis(text(form, "basis_choice"), text(form, "basis_note")) : null;
+    go(
+      to,
+      rule === "required"
+        ? "This kind of company must have a maximum number of shares: please give the number authorised."
+        : "Please give the number of shares authorised, or untick the maximum.",
+    );
+  const target =
+    limited && authorised ? parseTarget(text(form, "basis_choice")) : null;
+  const basis =
+    limited && authorised && !target
+      ? parseBasis(text(form, "basis_choice"), text(form, "basis_note"))
+      : null;
   if (basis && "error" in basis) go(to, basis.error);
 
   const { data, error } = await ctx
     .db!.from("share_classes")
-    .insert({ entity_id: entityId, name, currency, par_value: par ? num(par) : null, limited, voting: form.get("voting") === "on", notes: optional(form, "notes") })
+    .insert({
+      entity_id: entityId,
+      name,
+      currency,
+      par_value: par ? num(par) : null,
+      limited,
+      voting: form.get("voting") === "on",
+      notes: optional(form, "notes"),
+    })
     .select("id")
     .single();
   if (error || !data) go(to, ownershipError(error?.message));
   if (limited && authorised) {
     const date = text(form, "authorised_on");
-    if (date && !isDate(date)) go(to, "Please enter the date as day, month and year.");
-    const { error: e } = await ctx.db!.from("share_transactions").insert({
-      entity_id: entityId,
-      class_id: data.id,
-      kind: "authorise",
-      transaction_date: date || new Date().toISOString().slice(0, 10),
-      shares: num(authorised),
-      resolution: optional(form, "resolution"),
-      ...(basis ?? {}),
-    });
-    if (e) go(to, `The class was added, but the authorised shares weren't: ${ownershipError(e.message)}`);
+    if (date && !isDate(date))
+      go(to, "Please enter the date as day, month and year.");
+    const { data: tx, error: e } = await ctx
+      .db!.from("share_transactions")
+      .insert({
+        entity_id: entityId,
+        class_id: data.id,
+        kind: "authorise",
+        transaction_date: date || new Date().toISOString().slice(0, 10),
+        shares: num(authorised),
+        resolution: optional(form, "resolution"),
+        ...(basis ?? {}),
+      })
+      .select("id")
+      .single();
+    if (e || !tx)
+      go(
+        to,
+        `The class was added, but the authorised shares weren't: ${ownershipError(e?.message)}`,
+      );
+    if (target) {
+      const made = await draftForTransaction(
+        ctx,
+        entityId,
+        tx.id,
+        target,
+        shareWording({
+          kind: "authorise",
+          shares: num(authorised),
+          className: name,
+        }),
+      );
+      if ("error" in made)
+        go(
+          to,
+          `The class was added, but the decision wasn't drafted: ${made.error}`,
+        );
+      go(made.href, undefined, "change_drafted");
+    }
     go(to, undefined, "share_class_added_authorised");
   }
   go(to, undefined, "share_class_added");
 }
 
-export async function removeShareClass(familyId: string, entityId: string, classId: string) {
+export async function removeShareClass(
+  familyId: string,
+  entityId: string,
+  classId: string,
+) {
   const ctx = await getFamilyContext(familyId);
-  const error = await askToRemove(ctx, "share_classes", classId, { entity_id: entityId });
+  const error = await askToRemove(ctx, "share_classes", classId, {
+    entity_id: entityId,
+  });
   go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
-export async function recordShareTransaction(familyId: string, entityId: string, form: FormData) {
+export async function recordShareTransaction(
+  familyId: string,
+  entityId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
   const kind = text(form, "kind");
@@ -154,9 +334,13 @@ export async function recordShareTransaction(familyId: string, entityId: string,
   if (!classId) go(to, "Please choose the class of shares.");
   if (!isDate(date)) go(to, "Please enter the date as day, month and year.");
   if (!whole(shares)) go(to, "The number of shares should be a whole number.");
-  if (consideration && !amount(consideration)) go(to, "The amount paid should be a number.");
-  const basis = parseBasis(text(form, "basis_choice"), text(form, "basis_note"));
-  if ("error" in basis) go(to, basis.error);
+  if (consideration && !amount(consideration))
+    go(to, "The amount paid should be a number.");
+  const target = parseTarget(text(form, "basis_choice"));
+  const basis = target
+    ? null
+    : parseBasis(text(form, "basis_choice"), text(form, "basis_note"));
+  if (basis && "error" in basis) go(to, basis.error);
 
   // The transferor is checked first, before anything (such as a new
   // provider for the receiver) is saved.
@@ -168,7 +352,11 @@ export async function recordShareTransaction(familyId: string, entityId: string,
     if (!giver) go(to, "Please choose who the shares are transferred from.");
     // Only a current holder can transfer, and not more than they hold (less
     // anything already in another transfer waiting for approval).
-    const { data: rows } = await ctx.db!.from("share_transactions").select("*").eq("class_id", classId).eq("entity_id", entityId);
+    const { data: rows } = await ctx
+      .db!.from("share_transactions")
+      .select("*")
+      .eq("class_id", classId)
+      .eq("entity_id", entityId);
     const all = (rows ?? []) as Record<string, unknown>[];
     const key = choice;
     const is = (r: Record<string, unknown>, prefix: "to_" | "from_") => {
@@ -177,9 +365,23 @@ export async function recordShareTransaction(familyId: string, entityId: string,
     };
     const held = all
       .filter((r) => r.status === "approved" && r.kind !== "authorise")
-      .reduce((n, r) => n + (is(r, "to_") ? Number(r.shares) : 0) - (r.kind === "transfer" && is(r, "from_") ? Number(r.shares) : 0), 0);
-    const waiting = all.filter((r) => r.status === "draft" && r.kind === "transfer" && is(r, "from_")).reduce((n, r) => n + Number(r.shares), 0);
-    if (held <= 0) go(to, "They don't hold any shares of this class, so they can't transfer any.");
+      .reduce(
+        (n, r) =>
+          n +
+          (is(r, "to_") ? Number(r.shares) : 0) -
+          (r.kind === "transfer" && is(r, "from_") ? Number(r.shares) : 0),
+        0,
+      );
+    const waiting = all
+      .filter(
+        (r) => r.status === "draft" && r.kind === "transfer" && is(r, "from_"),
+      )
+      .reduce((n, r) => n + Number(r.shares), 0);
+    if (held <= 0)
+      go(
+        to,
+        "They don't hold any shares of this class, so they can't transfer any.",
+      );
     if (num(shares) > held - waiting)
       go(
         to,
@@ -195,30 +397,73 @@ export async function recordShareTransaction(familyId: string, entityId: string,
     holders = { ...receiver.value };
   }
   if (from) {
-    if (`${holders.to_person_id ?? holders.to_organisation_id ?? holders.to_entity_id}` === `${from.from_person_id ?? from.from_organisation_id ?? from.from_entity_id}`)
+    if (
+      `${holders.to_person_id ?? holders.to_organisation_id ?? holders.to_entity_id}` ===
+      `${from.from_person_id ?? from.from_organisation_id ?? from.from_entity_id}`
+    )
       go(to, "The shares need to go to someone else.");
     holders = { ...holders, ...from };
   }
 
-  const { error } = await ctx.db!.from("share_transactions").insert({
-    entity_id: entityId,
-    class_id: classId,
-    kind,
-    transaction_date: date,
-    shares: num(shares),
-    ...holders,
-    // Certificate numbers are given when the transaction is approved.
-    consideration: consideration ? num(consideration) : null,
-    resolution: optional(form, "resolution"),
-    notes: optional(form, "notes"),
-    ...basis,
-  });
-  go(to, error ? ownershipError(error.message) : undefined, "share_transaction_recorded");
+  const { data: tx, error } = await ctx
+    .db!.from("share_transactions")
+    .insert({
+      entity_id: entityId,
+      class_id: classId,
+      kind,
+      transaction_date: date,
+      shares: num(shares),
+      ...holders,
+      // Certificate numbers are given when the transaction is approved.
+      consideration: consideration ? num(consideration) : null,
+      resolution: optional(form, "resolution"),
+      notes: optional(form, "notes"),
+      ...(basis ?? {}),
+    })
+    .select("id, class_id")
+    .single();
+  if (error || !tx) go(to, ownershipError(error?.message));
+  if (target) {
+    const { data: cls } = await ctx
+      .db!.from("share_classes")
+      .select("name, currency")
+      .eq("id", classId)
+      .maybeSingle();
+    const words = shareWording({
+      kind,
+      shares: num(shares),
+      className: cls?.name ?? "",
+      to:
+        kind === "authorise"
+          ? undefined
+          : await nameOfHolder(ctx, holders, "to_"),
+      from:
+        kind === "transfer"
+          ? await nameOfHolder(ctx, holders, "from_")
+          : undefined,
+      consideration: consideration
+        ? `${cls?.currency ?? ""} ${num(consideration).toLocaleString("en-GB")}`
+        : null,
+    });
+    const made = await draftForTransaction(ctx, entityId, tx.id, target, words);
+    if ("error" in made)
+      go(
+        to,
+        `The transaction was recorded as a draft, but the decision wasn't drafted: ${made.error}`,
+      );
+    go(made.href, undefined, "change_drafted");
+  }
+  go(to, undefined, "share_transaction_recorded");
 }
 
 // Approves the draft exactly as the Manager saw it: if it was changed since
 // the page was loaded, nothing is approved and the Manager is asked to look again.
-export async function approveShareTransaction(familyId: string, entityId: string, transactionId: string, seenVersion: string) {
+export async function approveShareTransaction(
+  familyId: string,
+  entityId: string,
+  transactionId: string,
+  seenVersion: string,
+) {
   const ctx = await manager(familyId, entityId, "approve a share transaction");
   const { data, error } = await ctx
     .db!.from("share_transactions")
@@ -228,30 +473,51 @@ export async function approveShareTransaction(familyId: string, entityId: string
     .eq("status", "draft")
     .eq("updated_at", seenVersion)
     .select("id");
-  if (!error && !data?.length) go(back(familyId, entityId), "Not approved: the transaction was changed or approved since you opened the page. Please look at it again.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "share_transaction_approved");
+  if (!error && !data?.length)
+    go(
+      back(familyId, entityId),
+      "Not approved: the transaction was changed or approved since you opened the page. Please look at it again.",
+    );
+  go(
+    back(familyId, entityId),
+    error ? ownershipError(error.message) : undefined,
+    "share_transaction_approved",
+  );
 }
 
-export async function removeShareTransaction(familyId: string, entityId: string, transactionId: string) {
+export async function removeShareTransaction(
+  familyId: string,
+  entityId: string,
+  transactionId: string,
+) {
   const ctx = await getFamilyContext(familyId);
-  const error = await askToRemove(ctx, "share_transactions", transactionId, { entity_id: entityId });
+  const error = await askToRemove(ctx, "share_transactions", transactionId, {
+    entity_id: entityId,
+  });
   go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
 // ---------------------------------------------------------------------------
 // Trusts and foundations
 
-export async function addSettlement(familyId: string, entityId: string, form: FormData) {
+export async function addSettlement(
+  familyId: string,
+  entityId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
   const kind = text(form, "kind") || "initial";
   const date = text(form, "settled_on");
   const value = text(form, "amount");
   const currency = text(form, "currency").toUpperCase();
-  if (!["initial", "additional"].includes(kind)) go(to, "Please choose the kind of settlement.");
-  if (date && !isDate(date)) go(to, "Please enter the date as day, month and year.");
+  if (!["initial", "additional"].includes(kind))
+    go(to, "Please choose the kind of settlement.");
+  if (date && !isDate(date))
+    go(to, "Please enter the date as day, month and year.");
   if (value && !amount(value)) go(to, "The value should be a number.");
-  if (value && !/^[A-Z]{3}$/.test(currency)) go(to, "Please give the currency of the value, e.g. ZAR.");
+  if (value && !/^[A-Z]{3}$/.test(currency))
+    go(to, "Please give the currency of the value, e.g. ZAR.");
   const holder = await chosenHolder(ctx, form, "holder", "");
   if ("error" in holder) go(to, holder.error);
   const { error } = await ctx.db!.from("settlements").insert({
@@ -267,21 +533,34 @@ export async function addSettlement(familyId: string, entityId: string, form: Fo
   go(to, error ? ownershipError(error.message) : undefined, "settlement_added");
 }
 
-export async function removeSettlement(familyId: string, entityId: string, id: string) {
+export async function removeSettlement(
+  familyId: string,
+  entityId: string,
+  id: string,
+) {
   const ctx = await getFamilyContext(familyId);
-  const error = await askToRemove(ctx, "settlements", id, { entity_id: entityId });
+  const error = await askToRemove(ctx, "settlements", id, {
+    entity_id: entityId,
+  });
   go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
-export async function addBeneficiary(familyId: string, entityId: string, form: FormData) {
+export async function addBeneficiary(
+  familyId: string,
+  entityId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
   const interest = text(form, "interest") || "discretionary";
   const share = text(form, "share_percent");
   const added = text(form, "added_on");
-  if (!oneOf(interest, INTERESTS)) go(to, "Please choose the kind of interest.");
-  if (share && (!amount(share) || num(share) <= 0 || num(share) > 100)) go(to, "The share should be a percentage between 0 and 100.");
-  if (added && !isDate(added)) go(to, "Please enter the date as day, month and year.");
+  if (!oneOf(interest, INTERESTS))
+    go(to, "Please choose the kind of interest.");
+  if (share && (!amount(share) || num(share) <= 0 || num(share) > 100))
+    go(to, "The share should be a percentage between 0 and 100.");
+  if (added && !isDate(added))
+    go(to, "Please enter the date as day, month and year.");
   let who: Record<string, string | null>;
   if (text(form, "holder") === "cause") {
     const cause = text(form, "cause");
@@ -300,59 +579,143 @@ export async function addBeneficiary(familyId: string, entityId: string, form: F
     added_on: added || null,
     notes: optional(form, "notes"),
   });
-  go(to, error ? ownershipError(error.message) : undefined, "beneficiary_added");
+  go(
+    to,
+    error ? ownershipError(error.message) : undefined,
+    "beneficiary_added",
+  );
 }
 
-export async function endBeneficiary(familyId: string, entityId: string, id: string, form: FormData) {
+export async function endBeneficiary(
+  familyId: string,
+  entityId: string,
+  id: string,
+  form: FormData,
+) {
   const ctx = await editor(familyId, entityId);
   const endedOn = String(form.get("ended_on") ?? "").trim();
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-  if (!isDate(endedOn)) go(back(familyId, entityId), "Please give the date it ended.");
-  if (endedOn > today) go(back(familyId, entityId), "The date it ended can't be in the future.");
-  const { data, error } = await ctx.db!.from("beneficiaries").update({ ceased_on: endedOn }).eq("id", id).eq("entity_id", entityId).is("ceased_on", null).select("id");
-  if (error && /check constraint/.test(error.message)) go(back(familyId, entityId), "The date it ended can't be before the date they became a beneficiary.");
-  if (!error && !data?.length) go(back(familyId, entityId), "That has already ended, or couldn't be found. Please look again.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "beneficiary_ended");
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Europe/London",
+  });
+  if (!isDate(endedOn))
+    go(back(familyId, entityId), "Please give the date it ended.");
+  if (endedOn > today)
+    go(back(familyId, entityId), "The date it ended can't be in the future.");
+  const { data, error } = await ctx
+    .db!.from("beneficiaries")
+    .update({ ceased_on: endedOn })
+    .eq("id", id)
+    .eq("entity_id", entityId)
+    .is("ceased_on", null)
+    .select("id");
+  if (error && /check constraint/.test(error.message))
+    go(
+      back(familyId, entityId),
+      "The date it ended can't be before the date they became a beneficiary.",
+    );
+  if (!error && !data?.length)
+    go(
+      back(familyId, entityId),
+      "That has already ended, or couldn't be found. Please look again.",
+    );
+  go(
+    back(familyId, entityId),
+    error ? ownershipError(error.message) : undefined,
+    "beneficiary_ended",
+  );
 }
 
-export async function removeBeneficiary(familyId: string, entityId: string, id: string) {
+export async function removeBeneficiary(
+  familyId: string,
+  entityId: string,
+  id: string,
+) {
   const ctx = await getFamilyContext(familyId);
-  const error = await askToRemove(ctx, "beneficiaries", id, { entity_id: entityId });
+  const error = await askToRemove(ctx, "beneficiaries", id, {
+    entity_id: entityId,
+  });
   go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
-export async function addBeneficiaryClass(familyId: string, entityId: string, form: FormData) {
+export async function addBeneficiaryClass(
+  familyId: string,
+  entityId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
   const name = text(form, "name");
-  if (!name) go(to, "Please name the class, e.g. The descendants of Tom Hartley.");
-  const { error } = await ctx.db!.from("beneficiary_classes").insert({ entity_id: entityId, name, description: optional(form, "description") });
-  go(to, error ? ownershipError(error.message) : undefined, "beneficiary_class_added");
+  if (!name)
+    go(to, "Please name the class, e.g. The descendants of Tom Hartley.");
+  const { error } = await ctx
+    .db!.from("beneficiary_classes")
+    .insert({
+      entity_id: entityId,
+      name,
+      description: optional(form, "description"),
+    });
+  go(
+    to,
+    error ? ownershipError(error.message) : undefined,
+    "beneficiary_class_added",
+  );
 }
 
-export async function removeBeneficiaryClass(familyId: string, entityId: string, id: string) {
+export async function removeBeneficiaryClass(
+  familyId: string,
+  entityId: string,
+  id: string,
+) {
   const ctx = await getFamilyContext(familyId);
-  const error = await askToRemove(ctx, "beneficiary_classes", id, { entity_id: entityId });
+  const error = await askToRemove(ctx, "beneficiary_classes", id, {
+    entity_id: entityId,
+  });
   go(back(familyId, entityId), error ?? undefined, "removal_requested");
 }
 
-export async function addClassMember(familyId: string, entityId: string, classId: string, form: FormData) {
+export async function addClassMember(
+  familyId: string,
+  entityId: string,
+  classId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
   const personId = text(form, "person_id");
   const added = text(form, "added_on");
   if (!personId) go(to, "Please choose the person.");
-  if (added && !isDate(added)) go(to, "Please enter the date as day, month and year.");
-  const { error } = await ctx.db!.from("beneficiary_class_members").insert({ entity_id: entityId, class_id: classId, person_id: personId, added_on: added || null });
-  go(to, error ? ownershipError(error.message) : undefined, "class_member_added");
+  if (added && !isDate(added))
+    go(to, "Please enter the date as day, month and year.");
+  const { error } = await ctx
+    .db!.from("beneficiary_class_members")
+    .insert({
+      entity_id: entityId,
+      class_id: classId,
+      person_id: personId,
+      added_on: added || null,
+    });
+  go(
+    to,
+    error ? ownershipError(error.message) : undefined,
+    "class_member_added",
+  );
 }
 
-export async function endClassMember(familyId: string, entityId: string, id: string, form: FormData) {
+export async function endClassMember(
+  familyId: string,
+  entityId: string,
+  id: string,
+  form: FormData,
+) {
   const ctx = await editor(familyId, entityId);
   const endedOn = String(form.get("ended_on") ?? "").trim();
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-  if (!isDate(endedOn)) go(back(familyId, entityId), "Please give the date it ended.");
-  if (endedOn > today) go(back(familyId, entityId), "The date it ended can't be in the future.");
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Europe/London",
+  });
+  if (!isDate(endedOn))
+    go(back(familyId, entityId), "Please give the date it ended.");
+  if (endedOn > today)
+    go(back(familyId, entityId), "The date it ended can't be in the future.");
   const { data, error } = await ctx
     .db!.from("beneficiary_class_members")
     .update({ ceased_on: endedOn })
@@ -360,18 +723,86 @@ export async function endClassMember(familyId: string, entityId: string, id: str
     .eq("entity_id", entityId)
     .is("ceased_on", null)
     .select("id");
-  if (error && /check constraint/.test(error.message)) go(back(familyId, entityId), "The date can't be before the date they joined the class.");
-  if (!error && !data?.length) go(back(familyId, entityId), "That has already ended, or couldn't be found. Please look again.");
-  go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "class_member_ended");
+  if (error && /check constraint/.test(error.message))
+    go(
+      back(familyId, entityId),
+      "The date can't be before the date they joined the class.",
+    );
+  if (!error && !data?.length)
+    go(
+      back(familyId, entityId),
+      "That has already ended, or couldn't be found. Please look again.",
+    );
+  go(
+    back(familyId, entityId),
+    error ? ownershipError(error.message) : undefined,
+    "class_member_ended",
+  );
 }
 
 // Says (or changes) what a draft transaction was decided by. Changing a draft
 // makes the changer its preparer, so another Manager approves it.
-export async function setTransactionBasis(familyId: string, entityId: string, transactionId: string, form: FormData) {
+export async function setTransactionBasis(
+  familyId: string,
+  entityId: string,
+  transactionId: string,
+  form: FormData,
+) {
   const to = back(familyId, entityId);
   const ctx = await editor(familyId, entityId);
-  const basis = parseBasis(text(form, "basis_choice"), text(form, "basis_note"));
+  const target = parseTarget(text(form, "basis_choice"));
+  if (target) {
+    const { data: t } = await ctx
+      .db!.from("share_transactions")
+      .select("*")
+      .eq("id", transactionId)
+      .eq("entity_id", entityId)
+      .eq("status", "draft")
+      .maybeSingle();
+    if (!t)
+      go(
+        to,
+        "That draft couldn't be found. It may already have been approved.",
+      );
+    const { data: cls } = await ctx
+      .db!.from("share_classes")
+      .select("name")
+      .eq("id", t.class_id)
+      .maybeSingle();
+    const cols = t as Record<string, string | null>;
+    const words = shareWording({
+      kind: t.kind,
+      shares: Number(t.shares),
+      className: cls?.name ?? "",
+      to:
+        t.kind === "authorise"
+          ? undefined
+          : await nameOfHolder(ctx, cols, "to_"),
+      from:
+        t.kind === "transfer"
+          ? await nameOfHolder(ctx, cols, "from_")
+          : undefined,
+    });
+    const made = await draftForTransaction(
+      ctx,
+      entityId,
+      transactionId,
+      target,
+      words,
+    );
+    if ("error" in made) go(to, made.error);
+    go(made.href, undefined, "change_drafted");
+  }
+  const basis = parseBasis(
+    text(form, "basis_choice"),
+    text(form, "basis_note"),
+  );
   if ("error" in basis) go(to, basis.error);
-  const { error } = await ctx.db!.from("share_transactions").update(basis).eq("id", transactionId).eq("entity_id", entityId).eq("status", "draft");
+  const { error } = await ctx
+    .db!.from("share_transactions")
+    .update(basis)
+    .eq("id", transactionId)
+    .eq("entity_id", entityId)
+    .eq("status", "draft");
   go(to, error ? ownershipError(error.message) : undefined, "basis_saved");
 }

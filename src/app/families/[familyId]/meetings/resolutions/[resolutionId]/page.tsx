@@ -14,7 +14,12 @@ import {
 } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
 import { formatDate } from "@/lib/governance";
-import { OUTCOMES, REQUIRED, RESOLUTION_STATUS } from "@/lib/meetings";
+import {
+  OUTCOMES,
+  REQUIRED,
+  RESOLUTION_STATUS,
+  actionText,
+} from "@/lib/meetings";
 import { errorMessage, savedMessage } from "@/lib/messages";
 import { displayNames, type PersonSummary } from "@/lib/people";
 import {
@@ -366,6 +371,11 @@ export default async function ResolutionPage({
                       </p>
                     )}
                     <p className="whitespace-pre-wrap text-ink">{d.wording}</p>
+                    {actionText(d.action, false) && (
+                      <p className="text-sm text-ink-2">
+                        {actionText(d.action, false)}
+                      </p>
+                    )}
                     {draft && (
                       <div className="flex flex-wrap items-start gap-3">
                         <Fold label="Change the wording">

@@ -22,15 +22,31 @@ export default async function CompliancePage({
   const { familyId } = await params;
   const sp = await searchParams;
   const ctx = await getFamilyContext(familyId);
-  const familyName = /family$/i.test(ctx.family.name.trim()) ? ctx.family.name : `${ctx.family.name} family`;
+  const familyName = /family$/i.test(ctx.family.name.trim())
+    ? ctx.family.name
+    : `${ctx.family.name} family`;
 
-  let content = <Notice>This family&apos;s database isn&apos;t connected yet.</Notice>;
+  let content = (
+    <Notice>This family&apos;s database isn&apos;t connected yet.</Notice>
+  );
   if (ctx.db) {
     const data = await loadOrganisationData(ctx);
-    const { data: people } = await ctx.db.from("people").select("id, full_names, surname, known_as, birth_year");
-    const calendars = await loadCalendars(ctx, data, namer(data, displayNames((people ?? []) as PersonSummary[])));
+    const { data: people } = await ctx.db
+      .from("people")
+      .select("id, full_names, surname, known_as, birth_year");
+    const calendars = await loadCalendars(
+      ctx,
+      data,
+      namer(data, displayNames((people ?? []) as PersonSummary[])),
+    );
     content = data.entities.length ? (
-      <ComplianceList calendars={calendars} familyId={familyId} canEdit={ctx.canEdit} back={`/families/${familyId}/organisation/compliance`} showEntity />
+      <ComplianceList
+        calendars={calendars}
+        familyId={familyId}
+        canEdit={ctx.canEdit}
+        back={`/families/${familyId}/organisation/compliance`}
+        showEntity
+      />
     ) : (
       <Notice>No entities yet, or none that you have access to.</Notice>
     );
@@ -40,23 +56,48 @@ export default async function CompliancePage({
     <AppShell
       family={{ id: familyId, name: ctx.family.name }}
       section="organisation"
-      crumbs={[["My families", "/"], [familyName, `/families/${familyId}`], ["The Organisation", `/families/${familyId}/organisation`], ["Compliance calendar"]]}
-      user={{ name: ctx.displayName, roleLabel: ctx.roleLabel, hasTwoFactor: ctx.hasTwoFactor }}
+      crumbs={[
+        ["My families", "/"],
+        [familyName, `/families/${familyId}`],
+        ["The Organisation", `/families/${familyId}/organisation`],
+        ["Compliance calendar"],
+      ]}
+      user={{
+        name: ctx.displayName,
+        roleLabel: ctx.roleLabel,
+        hasTwoFactor: ctx.hasTwoFactor,
+      }}
     >
-      {sp.error && <Toast key={`e-${sp.error}-${Date.now()}`} kind="error" message={errorMessage(sp.error)!} />}
-      {sp.saved && !sp.error && <Toast key={`s-${sp.saved}-${Date.now()}`} message={savedMessage(sp.saved)!} />}
+      {sp.error && (
+        <Toast
+          key={`e-${sp.error}-${Date.now()}`}
+          kind="error"
+          message={errorMessage(sp.error)!}
+        />
+      )}
+      {sp.saved && !sp.error && (
+        <Toast
+          key={`s-${sp.saved}-${Date.now()}`}
+          message={savedMessage(sp.saved)!}
+        />
+      )}
       <PageTitle
         eyebrow="The Organisation"
         title="Compliance calendar"
         subtitle="Every entity's filings, fees and notices, worked out from its Entity Standard and what is recorded. Check the dates before relying on them: this is a checklist, not legal advice."
         actions={
-          <Link href={`/families/${familyId}/organisation`} className="btn-quiet">
+          <Link
+            href={`/families/${familyId}/organisation`}
+            className="btn-quiet"
+          >
             Back to the Organisation
           </Link>
         }
       />
       <div className="space-y-5">
-        {sp.error && <p className="alert">Not saved: {errorMessage(sp.error)}</p>}
+        {sp.error && (
+          <p className="alert">Not saved: {errorMessage(sp.error)}</p>
+        )}
         {content}
       </div>
     </AppShell>

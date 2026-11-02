@@ -98,6 +98,8 @@ export const SAVED_MESSAGES = {
   note_added: "File note saved.",
   note_saved: "File note saved.",
   basis_saved: "Saved. A Manager who didn't make the change approves the transaction.",
+  change_drafted: "The decision has been drafted here. The change takes effect once this meeting is confirmed or this resolution passes.",
+  resignation_noted: "Resignation recorded, and noted here for the board.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 

@@ -162,9 +162,11 @@ export function ShareTransactionForm({
   canAuthorise = true,
   holders = {},
   decisions = [],
+  targets = [],
 }: {
   action: (form: FormData) => Promise<void>;
   decisions?: [string, string][];
+  targets?: [string, string][];
   classes: [string, string][];
   options: HolderOptions;
   firstKind: "authorise" | "issue";
@@ -172,7 +174,10 @@ export function ShareTransactionForm({
   canAuthorise?: boolean; // only classes with a maximum can have more authorised
   // The current holders of each class (from the register), with how many
   // they can still transfer: the only choices for "From".
-  holders?: Record<string, { value: string; name: string; available: number }[]>;
+  holders?: Record<
+    string,
+    { value: string; name: string; available: number }[]
+  >;
 }) {
   const [kind, setKind] = useState<string>(firstKind);
   const [classId, setClassId] = useState(classes[0]?.[0] ?? "");
@@ -266,7 +271,9 @@ export function ShareTransactionForm({
           />
           {kind === "transfer" && giver && (
             <p className="mt-1 text-xs text-ink-3">
-              At most {giver.available.toLocaleString("en-GB")}: what {giver.name} holds and hasn&apos;t already put in another transfer.
+              At most {giver.available.toLocaleString("en-GB")}: what{" "}
+              {giver.name} holds and hasn&apos;t already put in another
+              transfer.
             </p>
           )}
         </div>
@@ -277,17 +284,30 @@ export function ShareTransactionForm({
             <label htmlFor="from" className={label}>
               From (required)
             </label>
-            <select id="from" name="from" required value={from} onChange={(e) => setFrom(e.target.value)} className="text-input">
+            <select
+              id="from"
+              name="from"
+              required
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="text-input"
+            >
               <option value="">Choose a current holder…</option>
               {current.map((h) => (
-                <option key={h.value} value={h.value} disabled={h.available <= 0}>
+                <option
+                  key={h.value}
+                  value={h.value}
+                  disabled={h.available <= 0}
+                >
                   {h.name}: {h.available.toLocaleString("en-GB")} {units}
                   {h.available <= 0 ? " (all in other transfers)" : ""}
                 </option>
               ))}
             </select>
             <p className="mt-1 text-xs text-ink-3">
-              {current.length ? "Only the current holders of this class are listed." : "Nobody holds shares of this class yet."}
+              {current.length
+                ? "Only the current holders of this class are listed."
+                : "Nobody holds shares of this class yet."}
             </p>
           </div>
         </div>
@@ -318,13 +338,20 @@ export function ShareTransactionForm({
             </p>
           </div>
           <p className="self-end text-sm text-ink-3 sm:col-span-2">
-            Certificate numbers are given automatically, one after the other, when the transaction is approved
-            {kind === "transfer" ? ": the new holder's first, then a balance certificate if the transferor keeps some." : "."}
+            Certificate numbers are given automatically, one after the other,
+            when the transaction is approved
+            {kind === "transfer"
+              ? ": the new holder's first, then a balance certificate if the transferor keeps some."
+              : "."}
           </p>
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <BasisField decisions={decisions} idPrefix="tx_basis" />
+        <BasisField
+          decisions={decisions}
+          targets={targets}
+          idPrefix="tx_basis"
+        />
         <div>
           <label htmlFor="tx_notes" className={label}>
             Notes
@@ -530,9 +557,11 @@ export function ShareClassForm({
   firstClass,
   currency,
   decisions = [],
+  targets = [],
 }: {
   action: (form: FormData) => Promise<void>;
   decisions?: [string, string][];
+  targets?: [string, string][];
   authorised: "required" | "optional" | "none";
   units: "shares" | "units";
   firstClass: boolean;
@@ -636,7 +665,11 @@ export function ShareClassForm({
             />
           </div>
           <div className="sm:col-span-2">
-            <BasisField decisions={decisions} idPrefix="class_basis" />
+            <BasisField
+              decisions={decisions}
+              targets={targets}
+              idPrefix="class_basis"
+            />
           </div>
         </div>
       )}

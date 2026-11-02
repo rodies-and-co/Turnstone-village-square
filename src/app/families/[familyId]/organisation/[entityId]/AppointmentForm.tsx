@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { BasisField } from "@/components/BasisField";
 import { SubmitButton } from "@/components/feedback";
-import { APPOINTMENT_ROLES, type AppointmentRole } from "@/lib/entity-checklist";
+import {
+  APPOINTMENT_ROLES,
+  type AppointmentRole,
+} from "@/lib/entity-checklist";
 import { NewProviderFields } from "../ProviderFields";
 
 const label = "mb-1 block text-sm font-medium text-ink";
@@ -20,9 +23,11 @@ export function AppointmentForm({
   entities,
   jurisdiction,
   decisions,
+  targets,
 }: {
   action: (form: FormData) => Promise<void>;
   decisions: [string, string][];
+  targets: [string, string][];
   roles: AppointmentRole[];
   people: [string, string][];
   organisations: [string, string][];
@@ -30,13 +35,22 @@ export function AppointmentForm({
   jurisdiction: string;
 }) {
   const [role, setRole] = useState<string>(roles[0] ?? "director");
-  const [holder, setHolder] = useState<"person" | "organisation" | "entity">("person");
+  const [holder, setHolder] = useState<"person" | "organisation" | "entity">(
+    "person",
+  );
   const [orgId, setOrgId] = useState("");
-  const others = (Object.keys(APPOINTMENT_ROLES) as AppointmentRole[]).filter((r) => !roles.includes(r));
+  const others = (Object.keys(APPOINTMENT_ROLES) as AppointmentRole[]).filter(
+    (r) => !roles.includes(r),
+  );
   const holders: [typeof holder, string][] = [
     ["person", "A person"],
     ["organisation", "A service provider"],
-    ...(entities.length ? ([["entity", "One of the family's entities"]] as [typeof holder, string][]) : []),
+    ...(entities.length
+      ? ([["entity", "One of the family's entities"]] as [
+          typeof holder,
+          string,
+        ][])
+      : []),
   ];
 
   return (
@@ -46,7 +60,13 @@ export function AppointmentForm({
           <label htmlFor="role" className={label}>
             Role (required)
           </label>
-          <select id="role" name="role" value={role} onChange={(e) => setRole(e.target.value)} className="text-input">
+          <select
+            id="role"
+            name="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="text-input"
+          >
             <optgroup label="Usual for this entity">
               {roles.map((r) => (
                 <option key={r} value={r}>
@@ -67,7 +87,12 @@ export function AppointmentForm({
           <label htmlFor="appointed_on" className={label}>
             Appointed on
           </label>
-          <input id="appointed_on" name="appointed_on" type="date" className="text-input" />
+          <input
+            id="appointed_on"
+            name="appointed_on"
+            type="date"
+            className="text-input"
+          />
         </div>
       </div>
 
@@ -75,8 +100,18 @@ export function AppointmentForm({
         <legend className={label}>Held by</legend>
         <div className="flex flex-wrap gap-x-6">
           {holders.map(([h, text]) => (
-            <label key={h} className="flex min-h-11 items-center gap-2 text-ink">
-              <input type="radio" name="holder" value={h} checked={holder === h} onChange={() => setHolder(h)} className="h-5 w-5" />
+            <label
+              key={h}
+              className="flex min-h-11 items-center gap-2 text-ink"
+            >
+              <input
+                type="radio"
+                name="holder"
+                value={h}
+                checked={holder === h}
+                onChange={() => setHolder(h)}
+                className="h-5 w-5"
+              />
               {text}
             </label>
           ))}
@@ -88,7 +123,13 @@ export function AppointmentForm({
           <label htmlFor="person_id" className={label}>
             Person (required)
           </label>
-          <select id="person_id" name="person_id" required className="text-input" defaultValue="">
+          <select
+            id="person_id"
+            name="person_id"
+            required
+            className="text-input"
+            defaultValue=""
+          >
             <option value="">Choose…</option>
             {people.map(([id, n]) => (
               <option key={id} value={id}>
@@ -96,7 +137,9 @@ export function AppointmentForm({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-ink-3">Anyone outside the family is added to the Tree first, as non-family.</p>
+          <p className="mt-1 text-xs text-ink-3">
+            Anyone outside the family is added to the Tree first, as non-family.
+          </p>
         </div>
       )}
 
@@ -106,7 +149,13 @@ export function AppointmentForm({
             <label htmlFor="organisation_id" className={label}>
               Service provider (required)
             </label>
-            <select id="organisation_id" name="organisation_id" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="text-input">
+            <select
+              id="organisation_id"
+              name="organisation_id"
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              className="text-input"
+            >
               <option value="">A new service provider (fill in below)</option>
               {organisations.map(([id, n]) => (
                 <option key={id} value={id}>
@@ -114,12 +163,25 @@ export function AppointmentForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-ink-3">Each provider is recorded once and kept up to date on the Service providers page.</p>
+            <p className="mt-1 text-xs text-ink-3">
+              Each provider is recorded once and kept up to date on the Service
+              providers page.
+            </p>
           </div>
           {!orgId && (
             <NewProviderFields
               prefix="organisation_"
-              defaultKind={role === "registered_agent" ? "registered_agent" : role === "trustee" ? "trust_company" : role === "management_company" ? "management_company" : role === "auditor" ? "accounting_firm" : "corporate_services"}
+              defaultKind={
+                role === "registered_agent"
+                  ? "registered_agent"
+                  : role === "trustee"
+                    ? "trust_company"
+                    : role === "management_company"
+                      ? "management_company"
+                      : role === "auditor"
+                        ? "accounting_firm"
+                        : "corporate_services"
+              }
             />
           )}
         </div>
@@ -130,7 +192,13 @@ export function AppointmentForm({
           <label htmlFor="holder_entity_id" className={label}>
             Family entity (required)
           </label>
-          <select id="holder_entity_id" name="holder_entity_id" required className="text-input" defaultValue="">
+          <select
+            id="holder_entity_id"
+            name="holder_entity_id"
+            required
+            className="text-input"
+            defaultValue=""
+          >
             <option value="">Choose…</option>
             {entities.map(([id, n]) => (
               <option key={id} value={id}>
@@ -138,7 +206,10 @@ export function AppointmentForm({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-ink-3">For example the family&apos;s private trust company as trustee, or a family company as corporate director.</p>
+          <p className="mt-1 text-xs text-ink-3">
+            For example the family&apos;s private trust company as trustee, or a
+            family company as corporate director.
+          </p>
         </div>
       )}
 
@@ -150,7 +221,11 @@ export function AppointmentForm({
         </label>
         {holder === "person" && (
           <label className="flex min-h-11 items-center gap-2 text-ink">
-            <input type="checkbox" name="identity_verified" className="h-5 w-5" />
+            <input
+              type="checkbox"
+              name="identity_verified"
+              className="h-5 w-5"
+            />
             Identity verified
           </label>
         )}
@@ -158,9 +233,10 @@ export function AppointmentForm({
       <div className="max-w-2xl">
         <BasisField
           decisions={decisions}
+          targets={targets}
           instrument
           idPrefix="appt_basis"
-          hint="Only passed decisions are listed: an appointment counts from when it is decided. Record the meeting or resolution first under Decisions & file notes."
+          hint="Choose a meeting or written resolution and the wording is drafted there: the appointment is recorded once the meeting is confirmed or the resolution passes. Or choose a decision already passed."
         />
       </div>
       <SubmitButton pendingText="Recording…">Record appointment</SubmitButton>

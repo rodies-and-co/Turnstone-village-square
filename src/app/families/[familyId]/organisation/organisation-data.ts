@@ -71,25 +71,47 @@ export const TRUST_TYPES = ["trust", "foundation"];
 
 export async function loadOrganisationData(ctx: FamilyContext) {
   const db = ctx.db!;
-  const [ents, orgs, classes, txs, setts, bens, bclasses, bmembers, appts] = await Promise.all([
-    db
-      .from("entities")
-      .select(
-        "id, name, entity_type, jurisdiction, sub_type, registration_number, registered_on, registered_address_id, year_end_month, year_end_day, status, dissolved_on, compliance_from, created_at, branch_id",
-      )
-      .order("name"),
-    db.from("outside_organisations").select("id, name, jurisdiction, registration_number, incorporated_on, address_id").order("name"),
-    db.from("share_classes").select("id, entity_id, name, currency, par_value, limited, voting, created_at").order("created_at"),
-    db.from("share_transactions").select("*").order("transaction_date"),
-    db.from("settlements").select("*").order("settled_on"),
-    db.from("beneficiaries").select("*").order("created_at"),
-    db.from("beneficiary_classes").select("id, entity_id, name, description").order("name"),
-    db.from("beneficiary_class_members").select("id, entity_id, class_id, person_id, added_on, ceased_on"),
-    db.from("appointments").select("id, entity_id, role, person_id, organisation_id, holder_entity_id, appointed_on, ceased_on"),
-  ]);
+  const [ents, orgs, classes, txs, setts, bens, bclasses, bmembers, appts] =
+    await Promise.all([
+      db
+        .from("entities")
+        .select(
+          "id, name, entity_type, jurisdiction, sub_type, registration_number, registered_on, registered_address_id, year_end_month, year_end_day, status, dissolved_on, compliance_from, created_at, branch_id",
+        )
+        .order("name"),
+      db
+        .from("outside_organisations")
+        .select(
+          "id, name, jurisdiction, registration_number, incorporated_on, address_id",
+        )
+        .order("name"),
+      db
+        .from("share_classes")
+        .select(
+          "id, entity_id, name, currency, par_value, limited, voting, created_at",
+        )
+        .order("created_at"),
+      db.from("share_transactions").select("*").order("transaction_date"),
+      db.from("settlements").select("*").order("settled_on"),
+      db.from("beneficiaries").select("*").order("created_at"),
+      db
+        .from("beneficiary_classes")
+        .select("id, entity_id, name, description")
+        .order("name"),
+      db
+        .from("beneficiary_class_members")
+        .select("id, entity_id, class_id, person_id, added_on, ceased_on"),
+      db
+        .from("appointments")
+        .select(
+          "id, entity_id, role, person_id, organisation_id, holder_entity_id, appointed_on, ceased_on",
+        ),
+    ]);
   const entities = (ents.data ?? []) as EntityRow[];
   const organisations = (orgs.data ?? []) as Organisation[];
-  const classesAll = (classes.data ?? []) as (ShareClass & { entity_id: string })[];
+  const classesAll = (classes.data ?? []) as (ShareClass & {
+    entity_id: string;
+  })[];
   const transactions: Transaction[] = ((txs.data ?? []) as Row[]).map((t) => ({
     ...(t as unknown as ShareTransaction),
     entity_id: String(t.entity_id),
@@ -106,9 +128,23 @@ export async function loadOrganisationData(ctx: FamilyContext) {
   }));
   const settlements = (setts.data ?? []) as Row[];
   const beneficiaries = (bens.data ?? []) as Row[];
-  const beneficiaryClasses = (bclasses.data ?? []) as { id: string; entity_id: string; name: string; description: string | null }[];
-  const classMembers = (bmembers.data ?? []) as { id: string; entity_id: string; class_id: string; person_id: string; added_on: string | null; ceased_on: string | null }[];
-  const appointments: Appointment[] = ((appts.data ?? []) as Row[]).map((a) => ({ ...(a as unknown as Appointment), holder: holderFrom(a) }));
+  const beneficiaryClasses = (bclasses.data ?? []) as {
+    id: string;
+    entity_id: string;
+    name: string;
+    description: string | null;
+  }[];
+  const classMembers = (bmembers.data ?? []) as {
+    id: string;
+    entity_id: string;
+    class_id: string;
+    person_id: string;
+    added_on: string | null;
+    ceased_on: string | null;
+  }[];
+  const appointments: Appointment[] = ((appts.data ?? []) as Row[]).map(
+    (a) => ({ ...(a as unknown as Appointment), holder: holderFrom(a) }),
+  );
 
   const registersFor = (id: string) =>
     registerOfMembers(
@@ -121,29 +157,50 @@ export async function loadOrganisationData(ctx: FamilyContext) {
     const parties: EntityOwnership["parties"] = [];
     for (const s of settlements.filter((x) => x.entity_id === e.id)) {
       const h = holderFrom(s);
-      if (h) parties.push({ holder: h, role: e.entity_type === "foundation" ? "Founder" : "Settlor" });
+      if (h)
+        parties.push({
+          holder: h,
+          role: e.entity_type === "foundation" ? "Founder" : "Settlor",
+        });
     }
-    for (const b of beneficiaries.filter((x) => x.entity_id === e.id && !x.ceased_on)) {
+    for (const b of beneficiaries.filter(
+      (x) => x.entity_id === e.id && !x.ceased_on,
+    )) {
       const h = holderFrom(b);
       if (h) parties.push({ holder: h, role: "Beneficiary" });
     }
-    for (const m of classMembers.filter((x) => x.entity_id === e.id && !x.ceased_on)) {
+    for (const m of classMembers.filter(
+      (x) => x.entity_id === e.id && !x.ceased_on,
+    )) {
       const cls = beneficiaryClasses.find((c) => c.id === m.class_id);
-      parties.push({ holder: { kind: "person", id: m.person_id }, role: `Beneficiary (${cls?.name ?? "a class"})` });
+      parties.push({
+        holder: { kind: "person", id: m.person_id },
+        role: `Beneficiary (${cls?.name ?? "a class"})`,
+      });
     }
-    const current = appointments.filter((a) => a.entity_id === e.id && !a.ceased_on);
+    const current = appointments.filter(
+      (a) => a.entity_id === e.id && !a.ceased_on,
+    );
     for (const a of current) {
-      if (a.holder && PARTY_ROLES[a.role]) parties.push({ holder: a.holder, role: PARTY_ROLES[a.role] });
+      if (a.holder && PARTY_ROLES[a.role])
+        parties.push({ holder: a.holder, role: PARTY_ROLES[a.role] });
     }
     return {
       id: e.id,
       name: e.name,
       entity_type: e.entity_type,
       shareholders: SHARE_TYPES.includes(e.entity_type)
-        ? ownershipShares(registersFor(e.id)).map((o) => ({ holder: o.holder, percent: Math.max(o.percent, o.votingPercent) }))
+        ? ownershipShares(registersFor(e.id)).map((o) => ({
+            holder: o.holder,
+            percent: Math.max(o.percent, o.votingPercent),
+          }))
         : [],
       parties,
-      managers: current.flatMap((a) => (a.holder && MANAGER_ROLES[a.role] ? [{ holder: a.holder, role: MANAGER_ROLES[a.role] }] : [])),
+      managers: current.flatMap((a) =>
+        a.holder && MANAGER_ROLES[a.role]
+          ? [{ holder: a.holder, role: MANAGER_ROLES[a.role] }]
+          : [],
+      ),
     };
   });
 

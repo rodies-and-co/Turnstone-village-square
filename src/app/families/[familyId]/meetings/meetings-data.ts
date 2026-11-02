@@ -76,7 +76,15 @@ export type Decision = {
   title: string;
   background: string | null;
   wording: string;
-  outcome: "proposed" | "carried" | "not_carried" | "withdrawn";
+  outcome: "proposed" | "carried" | "not_carried" | "withdrawn" | "noted";
+  action:
+    | "appoint"
+    | "end_appointment"
+    | "note_resignation"
+    | "share_transaction"
+    | null;
+  appointment_id: string | null;
+  proposed: Record<string, unknown> | null;
   votes_for: number | null;
   votes_against: number | null;
   abstentions: number | null;

@@ -6,6 +6,7 @@ const label = "mb-1 block text-sm font-medium text-ink";
 
 export function BasisField({
   decisions,
+  targets = [],
   instrument = false,
   idPrefix = "basis",
   defaultValue,
@@ -14,6 +15,9 @@ export function BasisField({
 }: {
   // From decisionChoices(): ["decision:<id>", "Board: Minute 3, item 1 – … (passed …)"].
   decisions: [string, string][];
+  // From decisionTargets(): open meetings and resolutions, and new written
+  // resolutions, where the decision is drafted for you.
+  targets?: [string, string][];
   instrument?: boolean;
   idPrefix?: string;
   defaultValue?: string | null;
@@ -36,8 +40,17 @@ export function BasisField({
           <option value="" disabled>
             Choose…
           </option>
+          {targets.length > 0 && (
+            <optgroup label="Draft the decision for me (it takes effect once passed)">
+              {targets.map(([v, t]) => (
+                <option key={v} value={v}>
+                  {t}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {decisions.length > 0 && (
-            <optgroup label="Minutes and written resolutions">
+            <optgroup label="Already in a minute or written resolution">
               {decisions.map(([v, t]) => (
                 <option key={v} value={v}>
                   {t}
@@ -58,9 +71,9 @@ export function BasisField({
         </select>
         <p className="mt-1 text-xs text-ink-3">
           {hint ??
-            (decisions.length
-              ? "Record the meeting or resolution first (Decisions & file notes). It must be passed before this counts."
-              : "No minutes or resolutions are recorded for this entity yet. Record the decision under Decisions & file notes first, unless it was part of the formation documents.")}
+            (targets.length
+              ? "Choose a meeting or a written resolution, and the wording is drafted for you there. The change takes effect when the meeting is confirmed or the resolution passes."
+              : "Record the meeting or resolution first (Decisions & file notes). It must be passed before this counts.")}
         </p>
       </div>
       {instrument && (
