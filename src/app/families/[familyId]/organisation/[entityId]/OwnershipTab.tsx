@@ -34,7 +34,10 @@ import {
   removeSettlement,
   removeShareClass,
   removeShareTransaction,
+  setTransactionBasis,
 } from "../ownership-actions";
+import { BasisField } from "@/components/BasisField";
+import { basisLabels, decisionChoices } from "../../meetings/meetings-data";
 import { BeneficiaryForm, SettlementForm, ShareClassForm, ShareTransactionForm, type HolderOptions } from "./OwnershipForms";
 
 type Addr = { id: string; line1: string; line2: string | null; city: string; region: string | null; postal_code: string | null; country: string };
@@ -59,6 +62,12 @@ export async function OwnershipTab({
 }) {
   const db = ctx.db!;
   const me = ctx.user?.id ?? null;
+  // What each transaction was decided by, and the decisions to choose from
+  // (passed, or still to be decided: a draft can wait for its decision).
+  const [basisOf, decisionOptions] = await Promise.all([
+    basisLabels(ctx, entity.id),
+    ctx.canEdit ? decisionChoices(ctx, entity.id) : Promise.resolve([] as [string, string][]),
+  ]);
   const shareKind = SHARE_TYPES.includes(entity.entity_type);
   const trustKind = TRUST_TYPES.includes(entity.entity_type);
   const foundation = entity.entity_type === "foundation";
@@ -167,7 +176,7 @@ export async function OwnershipTab({
       t.certificate_number ? `Certificate ${t.certificate_number}` : null,
       t.balance_certificate_number ? `balance certificate ${t.balance_certificate_number}` : null,
       t.consideration ? `paid ${formatMoney(t.consideration, myClasses.find((c) => c.id === t.class_id)?.currency ?? null)}` : null,
-      t.resolution,
+      basisOf(t) ? `Decided by: ${basisOf(t)}` : t.resolution,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -218,6 +227,7 @@ export async function OwnershipTab({
                   units={units}
                   firstClass={myClasses.length === 0}
                   currency={entity.base_currency}
+                  decisions={decisionOptions}
                 />
               </Fold>
             )}
@@ -245,6 +255,16 @@ export async function OwnershipTab({
                       )}
                       {ctx.canEdit && <ConfirmRemove action={removeShareTransaction.bind(null, familyId, entity.id, t.id)} what="this draft transaction" />}
                     </div>
+                    {ctx.canEdit && (
+                      <div className="w-full">
+                        <Fold label={t.basis ? "Change what it was decided by" : "Say what it was decided by (needed before approval)"}>
+                          <form action={setTransactionBasis.bind(null, familyId, entity.id, t.id)} className="space-y-3">
+                            <BasisField decisions={decisionOptions} idPrefix={`basis-${t.id}`} defaultValue={t.decision_id ? `decision:${t.decision_id}` : t.basis === "formation" ? "formation" : null} />
+                            <SubmitButton>Save</SubmitButton>
+                          </form>
+                        </Fold>
+                      </div>
+                    )}
                   </li>
                 ))}
               </Rows>
@@ -317,6 +337,7 @@ export async function OwnershipTab({
                 <Fold label="Record a transaction">
                   <ShareTransactionForm
                     action={recordShareTransaction.bind(null, familyId, entity.id)}
+                    decisions={decisionOptions}
                     classes={myClasses.map((c) => [c.id, `${c.name} (${c.currency})`] as [string, string])}
                     options={options}
                     units={units}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BasisField } from "@/components/BasisField";
 import { SubmitButton } from "@/components/feedback";
 import { APPOINTMENT_ROLES, type AppointmentRole } from "@/lib/entity-checklist";
 import { NewProviderFields } from "../ProviderFields";
@@ -18,8 +19,10 @@ export function AppointmentForm({
   organisations,
   entities,
   jurisdiction,
+  decisions,
 }: {
   action: (form: FormData) => Promise<void>;
+  decisions: [string, string][];
   roles: AppointmentRole[];
   people: [string, string][];
   organisations: [string, string][];
@@ -152,6 +155,14 @@ export function AppointmentForm({
           </label>
         )}
       </fieldset>
+      <div className="max-w-2xl">
+        <BasisField
+          decisions={decisions}
+          instrument
+          idPrefix="appt_basis"
+          hint="Only passed decisions are listed: an appointment counts from when it is decided. Record the meeting or resolution first under Decisions & file notes."
+        />
+      </div>
       <SubmitButton pendingText="Recording…">Record appointment</SubmitButton>
     </form>
   );

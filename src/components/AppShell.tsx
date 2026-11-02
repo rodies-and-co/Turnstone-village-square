@@ -10,11 +10,13 @@ import { MobileMenu } from "@/components/MobileMenu";
 
 export type Crumb = [text: string, href?: string];
 
-type Section = "family-overview" | "tree" | "branches" | "organisation" | "standards" | null;
+type Section = "family-overview" | "tree" | "branches" | "organisation" | "meetings" | "standards" | null;
 
-// The plan's areas. Only built ones are links; the rest say "later".
-const LATER_GROUPS: [string, string[]][] = [
-  ["Things to do", ["Meetings & resolutions", "Projects", "Distributions", "Share transactions", "Risk management"]],
+// The plan's areas. Built ones are links (with their section and address
+// within the family); the rest say "later".
+type Item = string | [text: string, section: Section, path: string];
+const LATER_GROUPS: [string, Item[]][] = [
+  ["Things to do", [["Meetings & resolutions", "meetings", "/meetings"], "Projects", "Distributions", "Share transactions", "Risk management"]],
   ["Organising", ["To-do list", "Calendar", "Compliance calendar"]],
   ["Reports", ["Registers & charts", "Timeline", "Risk heat map"]],
   ["Village Square", ["Help", "Ask the Elder", "Circles of advisors"]],
@@ -99,11 +101,17 @@ export function AppShell({
               <Later>The Vault</Later>
             </ul>
           </div>
-          {/* Areas still to be built fold away, so the menu stays short. Only
-              one opens at a time: opening one closes the others (they share a name). */}
+          {/* The other areas fold away, so the menu stays short. Only one opens
+              at a time: opening one closes the others (they share a name). The
+              area of the page being shown starts open. */}
           <div className="space-y-1">
             {LATER_GROUPS.map(([group, items]) => (
-              <details key={group} name="side-menu-areas" className="group">
+              <details
+                key={group}
+                name="side-menu-areas"
+                className="group"
+                open={items.some((i) => Array.isArray(i) && i[1] === section) || undefined}
+              >
                 <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-1 font-semibold text-ink-2 hover:bg-muted [&::-webkit-details-marker]:hidden">
                   {group}
                   <span aria-hidden="true" className="text-sm transition-transform group-open:rotate-90">
@@ -111,9 +119,17 @@ export function AppShell({
                   </span>
                 </summary>
                 <ul className="pb-2">
-                  {items.map((i) => (
-                    <Later key={i}>{i}</Later>
-                  ))}
+                  {items.map((i) =>
+                    Array.isArray(i) ? (
+                      <li key={i[0]}>
+                        <NavLink href={`/families/${family.id}${i[2]}`} active={section === i[1]}>
+                          {i[0]}
+                        </NavLink>
+                      </li>
+                    ) : (
+                      <Later key={i}>{i}</Later>
+                    ),
+                  )}
                 </ul>
               </details>
             ))}

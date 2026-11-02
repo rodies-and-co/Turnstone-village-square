@@ -70,7 +70,7 @@ describe("the Organisation: who changes what", () => {
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
       await db.query("insert into entities (name, entity_type, jurisdiction, sub_type) values ('New Co Ltd', 'company', 'Mauritius', 'Domestic private company')");
       await db.query("update entities set activity = 'Holding company' where id = $1", [HOLDINGS]);
-      await db.query("insert into appointments (entity_id, role, person_id) values ($1, 'secretary', $2)", [HOLDINGS, NORTH]);
+      await db.query("insert into appointments (entity_id, role, person_id, basis) values ($1, 'secretary', $2, 'formation')", [HOLDINGS, NORTH]);
       expect((await db.query("delete from entities")).rowCount).toBe(0);
       expect((await db.query("delete from appointments")).rowCount).toBe(0);
     });
@@ -79,7 +79,7 @@ describe("the Organisation: who changes what", () => {
   it("Viewers cannot add or change anything", async () => {
     const v = await signedIn(USERS.hartleyViewerWholeFamily, "aal1");
     await expect(
-      as(hartley, v, (db) => db.query("insert into appointments (entity_id, role, person_id) values ($1, 'director', $2)", [HOLDINGS, NORTH])),
+      as(hartley, v, (db) => db.query("insert into appointments (entity_id, role, person_id, basis) values ($1, 'director', $2, 'formation')", [HOLDINGS, NORTH])),
     ).rejects.toThrow(/row-level security/);
     expect(await as(hartley, v, async (db) => (await db.query("update entities set activity = 'x'")).rowCount)).toBe(0);
   });
@@ -100,22 +100,22 @@ describe("the Organisation: keeping records sound", () => {
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
       await db.query("savepoint a");
       await expect(
-        db.query("insert into appointments (entity_id, role, person_id, organisation_id) values ($1, 'trustee', $2, $3)", [NORTH_TRUST, NORTH, ORG]),
+        db.query("insert into appointments (entity_id, role, person_id, organisation_id, basis) values ($1, 'trustee', $2, $3, 'formation')", [NORTH_TRUST, NORTH, ORG]),
       ).rejects.toThrow(/check constraint/);
       await db.query("rollback to savepoint a");
-      await expect(db.query("insert into appointments (entity_id, role) values ($1, 'trustee')", [NORTH_TRUST])).rejects.toThrow(/check constraint/);
+      await expect(db.query("insert into appointments (entity_id, role, basis) values ($1, 'trustee', 'formation')", [NORTH_TRUST])).rejects.toThrow(/check constraint/);
     });
   });
 
   it("the same person holds a role once at a time; a past appointment can be held again", async () => {
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
       await db.query("savepoint a");
-      await expect(db.query("insert into appointments (entity_id, role, person_id) values ($1, 'director', $2)", [HOLDINGS, NORTH])).rejects.toThrow(
+      await expect(db.query("insert into appointments (entity_id, role, person_id, basis) values ($1, 'director', $2, 'formation')", [HOLDINGS, NORTH])).rejects.toThrow(
         /duplicate key/,
       );
       await db.query("rollback to savepoint a");
       await db.query("update appointments set ceased_on = current_date where entity_id = $1 and person_id = $2", [HOLDINGS, NORTH]);
-      await db.query("insert into appointments (entity_id, role, person_id, appointed_on) values ($1, 'director', $2, current_date)", [HOLDINGS, NORTH]);
+      await db.query("insert into appointments (entity_id, role, person_id, appointed_on, basis) values ($1, 'director', $2, current_date, 'formation')", [HOLDINGS, NORTH]);
     });
   });
 
@@ -138,19 +138,19 @@ describe("the Organisation: keeping records sound", () => {
 describe("the Organisation: service providers and family entities as officers", () => {
   it("a role can be held by one of the family's entities, but not by the entity itself, and by one holder only", async () => {
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
-      await db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $2)", [HOLDINGS, NORTH_TRUST]);
+      await db.query("insert into appointments (entity_id, role, holder_entity_id, basis) values ($1, 'director', $2, 'formation')", [HOLDINGS, NORTH_TRUST]);
       await db.query("savepoint a");
-      await expect(db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $1)", [HOLDINGS])).rejects.toThrow(
+      await expect(db.query("insert into appointments (entity_id, role, holder_entity_id, basis) values ($1, 'director', $1, 'formation')", [HOLDINGS])).rejects.toThrow(
         /appointments_not_itself/,
       );
       await db.query("rollback to savepoint a");
       await db.query("savepoint b");
       await expect(
-        db.query("insert into appointments (entity_id, role, organisation_id, holder_entity_id) values ($1, 'secretary', $2, $3)", [HOLDINGS, ORG, NORTH_TRUST]),
+        db.query("insert into appointments (entity_id, role, organisation_id, holder_entity_id, basis) values ($1, 'secretary', $2, $3, 'formation')", [HOLDINGS, ORG, NORTH_TRUST]),
       ).rejects.toThrow(/appointments_one_holder/);
       await db.query("rollback to savepoint b");
       // The same family entity holds a role once at a time.
-      await expect(db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $2)", [HOLDINGS, NORTH_TRUST])).rejects.toThrow(
+      await expect(db.query("insert into appointments (entity_id, role, holder_entity_id, basis) values ($1, 'director', $2, 'formation')", [HOLDINGS, NORTH_TRUST])).rejects.toThrow(
         /duplicate key/,
       );
     });
@@ -160,7 +160,7 @@ describe("the Organisation: service providers and family entities as officers", 
     await as(hartley, await signedIn(USERS.hartleyManager), async (db) => {
       // A South-branch trust is a trustee of the North trust.
       const other = (await db.query("insert into entities (name, entity_type, jurisdiction, sub_type, branch_id) values ('South Trust', 'trust', 'United Kingdom', 'x', $1) returning id", [HARTLEY_DB.southBranch])).rows[0].id;
-      await db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'trustee', $2)", [NORTH_TRUST, other]);
+      await db.query("insert into appointments (entity_id, role, holder_entity_id, basis) values ($1, 'trustee', $2, 'formation')", [NORTH_TRUST, other]);
       await switchUser(db, hub, USERS.hartleyViewerBranch, "aal1");
       expect(await count(db, `select * from appointments where holder_entity_id = '${other}'`)).toBe(0);
     });

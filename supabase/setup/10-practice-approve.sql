@@ -4,6 +4,9 @@
 --
 -- It approves, as a fictional "practice approver" (a second Manager who
 -- exists only in practice families):
+--   - every meeting recorded as held (it confirms the record), oldest first;
+--   - every circulated written resolution with enough signatures (it confirms
+--     it has passed);
 --   - every draft share transaction, oldest first;
 --   - every waiting removal request (once two-person removals are installed).
 -- All the normal checks still run (authorised shares, holdings, date order,
@@ -34,6 +37,26 @@ begin
     'sub', approver, 'role', 'authenticated', 'aal', 'aal2', 'iss', iss,
     'vs', jsonb_build_object('families', jsonb_build_object(fid::text, 'manager'), 'mfa', true)
   )::text, true);
+
+  -- Meetings and resolutions first: share transactions may rely on them.
+  if to_regclass('public.meetings') is not null then
+    for r in execute 'select id, title, meeting_on from public.meetings where status = ''held'' order by meeting_on' loop
+      begin
+        execute 'update public.meetings set status = ''confirmed'' where id = $1' using r.id;
+        done_count := done_count + 1;
+      exception when others then
+        problems := problems || E'\n  Meeting (' || r.title || ', ' || to_char(r.meeting_on, 'DD/MM/YYYY') || '): ' || regexp_replace(sqlerrm, '^Meetings: ', '');
+      end;
+    end loop;
+    for r in execute 'select id, title from public.written_resolutions where status = ''circulated'' order by circulated_on' loop
+      begin
+        execute 'update public.written_resolutions set status = ''passed'' where id = $1' using r.id;
+        done_count := done_count + 1;
+      exception when others then
+        problems := problems || E'\n  Resolution (' || r.title || '): ' || regexp_replace(sqlerrm, '^Resolutions: ', '');
+      end;
+    end loop;
+  end if;
 
   for r in select id, kind, shares from public.share_transactions where status = 'draft' order by transaction_date, created_at loop
     begin

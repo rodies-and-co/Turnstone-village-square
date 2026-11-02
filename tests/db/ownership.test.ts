@@ -91,8 +91,8 @@ describe("Ownership: share transactions are prepared by one person and approved 
     await db.query("rollback to savepoint step");
   }
   const APPROVE = "update share_transactions set status = 'approved' where id = $1";
-  const DRAFT = `insert into share_transactions (entity_id, class_id, kind, transaction_date, shares, to_person_id, from_person_id, certificate_number, balance_certificate_number)
-    values ($1, $2, $3, current_date, $4, $5, $6, $7, $8) returning id`;
+  const DRAFT = `insert into share_transactions (entity_id, class_id, kind, transaction_date, shares, to_person_id, from_person_id, certificate_number, balance_certificate_number, basis)
+    values ($1, $2, $3, current_date, $4, $5, $6, $7, $8, 'formation') returning id`;
   async function draft(db: Client, kind: string, shares: number, to: string | null, from: string | null = null, cert: string | null = null, balance: string | null = null) {
     return (await db.query(DRAFT, [HOLDINGS, ORDINARY, kind, shares, to, from, cert, balance])).rows[0].id as string;
   }
@@ -197,7 +197,7 @@ describe("Ownership: share transactions are prepared by one person and approved 
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
       const early = (
         await db.query(
-          "insert into share_transactions (entity_id, class_id, kind, transaction_date, shares, from_person_id, to_person_id) values ($1, $2, 'transfer', '2019-01-01', 10, $3, $4) returning id",
+          "insert into share_transactions (entity_id, class_id, kind, transaction_date, shares, from_person_id, to_person_id, basis) values ($1, $2, 'transfer', '2019-01-01', 10, $3, $4, 'formation') returning id",
           [HOLDINGS, ORDINARY, NORTH, SOUTH],
         )
       ).rows[0].id;

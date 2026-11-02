@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BasisField } from "@/components/BasisField";
 import { SubmitButton } from "@/components/feedback";
 
 const label = "mb-1 block text-sm font-medium text-ink";
@@ -160,8 +161,10 @@ export function ShareTransactionForm({
   units = "shares",
   canAuthorise = true,
   holders = {},
+  decisions = [],
 }: {
   action: (form: FormData) => Promise<void>;
+  decisions?: [string, string][];
   classes: [string, string][];
   options: HolderOptions;
   firstKind: "authorise" | "issue";
@@ -321,17 +324,7 @@ export function ShareTransactionForm({
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="tx_resolution" className={label}>
-            Approved by (minute or resolution)
-          </label>
-          <input
-            id="tx_resolution"
-            name="resolution"
-            className="text-input"
-            placeholder="e.g. Directors' resolution of 1 March 2026"
-          />
-        </div>
+        <BasisField decisions={decisions} idPrefix="tx_basis" />
         <div>
           <label htmlFor="tx_notes" className={label}>
             Notes
@@ -536,8 +529,10 @@ export function ShareClassForm({
   units,
   firstClass,
   currency,
+  decisions = [],
 }: {
   action: (form: FormData) => Promise<void>;
+  decisions?: [string, string][];
   authorised: "required" | "optional" | "none";
   units: "shares" | "units";
   firstClass: boolean;
@@ -640,15 +635,8 @@ export function ShareClassForm({
               className="text-input"
             />
           </div>
-          <div>
-            <label htmlFor="class_resolution" className={label}>
-              Approved by (minute or resolution)
-            </label>
-            <input
-              id="class_resolution"
-              name="resolution"
-              className="text-input"
-            />
+          <div className="sm:col-span-2">
+            <BasisField decisions={decisions} idPrefix="class_basis" />
           </div>
         </div>
       )}

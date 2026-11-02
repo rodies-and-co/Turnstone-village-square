@@ -7,6 +7,7 @@ import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
 import { INTERESTS, TRANSACTION_KINDS, holderColumns, holderFrom } from "@/lib/ownership";
+import { parseBasis } from "@/lib/meetings";
 import { friendlyError } from "@/lib/people";
 import { askToRemove } from "@/lib/removal";
 
@@ -34,7 +35,7 @@ const optional = (form: FormData, name: string) => text(form, name) || null;
 function ownershipError(message: string | undefined) {
   const m = message ?? "";
   // The database's own checks on shares explain themselves.
-  if (/^Shares: |^Ownership: /.test(m)) return m.replace(/^(Shares|Ownership): /, "");
+  if (/^(Shares|Ownership|Appointments): /.test(m)) return m.replace(/^(Shares|Ownership|Appointments): /, "");
   if (/share_classes_name/.test(m)) return "There is already a share class with that name.";
   if (/beneficiary_classes_name/.test(m)) return "There is already a class with that name.";
   if (/beneficiary_class_members_current/.test(m)) return "They are already in that class.";
@@ -108,6 +109,8 @@ export async function addShareClass(familyId: string, entityId: string, form: Fo
   if (authorised && !whole(authorised)) go(to, "The number of authorised shares should be a whole number.");
   if (limited && !authorised)
     go(to, rule === "required" ? "This kind of company must have a maximum number of shares: please give the number authorised." : "Please give the number of shares authorised, or untick the maximum.");
+  const basis = limited && authorised ? parseBasis(text(form, "basis_choice"), text(form, "basis_note")) : null;
+  if (basis && "error" in basis) go(to, basis.error);
 
   const { data, error } = await ctx
     .db!.from("share_classes")
@@ -125,6 +128,7 @@ export async function addShareClass(familyId: string, entityId: string, form: Fo
       transaction_date: date || new Date().toISOString().slice(0, 10),
       shares: num(authorised),
       resolution: optional(form, "resolution"),
+      ...(basis ?? {}),
     });
     if (e) go(to, `The class was added, but the authorised shares weren't: ${ownershipError(e.message)}`);
     go(to, undefined, "share_class_added_authorised");
@@ -151,6 +155,8 @@ export async function recordShareTransaction(familyId: string, entityId: string,
   if (!isDate(date)) go(to, "Please enter the date as day, month and year.");
   if (!whole(shares)) go(to, "The number of shares should be a whole number.");
   if (consideration && !amount(consideration)) go(to, "The amount paid should be a number.");
+  const basis = parseBasis(text(form, "basis_choice"), text(form, "basis_note"));
+  if ("error" in basis) go(to, basis.error);
 
   // The transferor is checked first, before anything (such as a new
   // provider for the receiver) is saved.
@@ -205,6 +211,7 @@ export async function recordShareTransaction(familyId: string, entityId: string,
     consideration: consideration ? num(consideration) : null,
     resolution: optional(form, "resolution"),
     notes: optional(form, "notes"),
+    ...basis,
   });
   go(to, error ? ownershipError(error.message) : undefined, "share_transaction_recorded");
 }
@@ -356,4 +363,15 @@ export async function endClassMember(familyId: string, entityId: string, id: str
   if (error && /check constraint/.test(error.message)) go(back(familyId, entityId), "The date can't be before the date they joined the class.");
   if (!error && !data?.length) go(back(familyId, entityId), "That has already ended, or couldn't be found. Please look again.");
   go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "class_member_ended");
+}
+
+// Says (or changes) what a draft transaction was decided by. Changing a draft
+// makes the changer its preparer, so another Manager approves it.
+export async function setTransactionBasis(familyId: string, entityId: string, transactionId: string, form: FormData) {
+  const to = back(familyId, entityId);
+  const ctx = await editor(familyId, entityId);
+  const basis = parseBasis(text(form, "basis_choice"), text(form, "basis_note"));
+  if ("error" in basis) go(to, basis.error);
+  const { error } = await ctx.db!.from("share_transactions").update(basis).eq("id", transactionId).eq("entity_id", entityId).eq("status", "draft");
+  go(to, error ? ownershipError(error.message) : undefined, "basis_saved");
 }

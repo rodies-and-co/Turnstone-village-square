@@ -223,7 +223,7 @@ describe("review fixes", () => {
     await as(hartley, await signedIn(USERS.hartleyAdministrator), async (db) => {
       const trust = "a9000000-0000-4000-8000-000000000002";
       const holdings = "a9000000-0000-4000-8000-000000000001";
-      await db.query("insert into appointments (entity_id, role, holder_entity_id) values ($1, 'director', $2)", [holdings, trust]);
+      await db.query("insert into appointments (entity_id, role, holder_entity_id, basis) values ($1, 'director', $2, 'formation')", [holdings, trust]);
       await refused(db, ASK, ["entities", trust, null], /still holds a role/);
       const org = (await db.query("select id from outside_organisations limit 1")).rows[0].id;
       await refused(db, ASK, ["outside_organisations", org, null], /still holds a current appointment/);

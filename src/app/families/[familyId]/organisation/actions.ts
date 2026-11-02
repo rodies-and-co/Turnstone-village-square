@@ -6,6 +6,7 @@ import { APPOINTMENT_ROLES, ENTITY_TYPES, closestStandard, matchStandard } from 
 import { getFamilyContext } from "@/lib/family-context";
 import { isDate, oneOf } from "@/lib/governance";
 import type { SavedCode } from "@/lib/messages";
+import { parseBasis } from "@/lib/meetings";
 import { askToRemove } from "@/lib/removal";
 import { addressMatchKey, friendlyError, parseAddress } from "@/lib/people";
 import { REQUIRED_APPOINTEES } from "@/lib/providers";
@@ -47,6 +48,7 @@ function orgError(message: string | undefined) {
   if (/foreign key/.test(m) && /share_transactions|settlements|beneficiar/.test(m))
     return "This entity holds shares in, settled, or benefits from another of the family's entities. Those are kept as records, so it can't be removed.";
   if (/base_currency/.test(m)) return "The currency should be three capital letters, e.g. GBP.";
+  if (/^Appointments: /.test(m)) return m.replace(/^Appointments: /, "");
   return friendlyError(m);
 }
 
@@ -193,7 +195,8 @@ export async function createEntity(familyId: string, form: FormData) {
     }
     const { error: e } = await ctx.db
       .from("appointments")
-      .insert({ entity_id: entity.id, role: r.role, organisation_id: organisationId, holder_entity_id: holderEntityId, appointed_on: d.value.registered_on });
+      // Named when the entity was formed.
+      .insert({ entity_id: entity.id, role: r.role, organisation_id: organisationId, holder_entity_id: holderEntityId, appointed_on: d.value.registered_on, basis: "formation" });
     if (e) problems.push(`${r.label}: ${orgError(e.message)}`);
   }
   if (problems.length) go(`/families/${familyId}/organisation/${entity.id}?tab=officers`, `The entity was added, but not every appointment: ${problems.join(" ")}`);
@@ -280,6 +283,9 @@ export async function addAppointment(familyId: string, entityId: string, form: F
   const appointedOn = text(form, "appointed_on");
   if (!oneOf(role, APPOINTMENT_ROLES)) go(back, "Please choose the role.");
   if (appointedOn && !isDate(appointedOn)) go(back, "Please enter the date as day, month and year.");
+  // What it was decided by, checked before anything (such as a new provider) is saved.
+  const basis = parseBasis(text(form, "basis_choice"), text(form, "basis_note"));
+  if ("error" in basis) go(back, basis.error);
 
   let personId: string | null = null;
   let organisationId: string | null = null;
@@ -312,6 +318,7 @@ export async function addAppointment(familyId: string, entityId: string, form: F
     resident: form.get("resident") === "on",
     identity_verified: holder === "person" && form.get("identity_verified") === "on",
     notes: optional(form, "notes"),
+    ...basis,
   });
   go(back, error ? orgError(error.message) : undefined, "appointment_added");
 }

@@ -104,6 +104,8 @@ insert into public.share_transactions
    null, 'a8000000-0000-4000-8000-000000000001', '2', 'approved', '40000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', now()),
   ('ab000000-0000-4000-8000-000000000004', 'a9000000-0000-4000-8000-000000000001', 'aa000000-0000-4000-8000-000000000001', 'issue', '2021-01-02', 10,
    null, 'a8000000-0000-4000-8000-000000000001', '3', 'draft', '40000000-0000-4000-8000-000000000001', null, null);
+-- The draft relies on the formation documents (decisions came later).
+update public.share_transactions set basis = 'formation' where id = 'ab000000-0000-4000-8000-000000000004';
 insert into public.settlements (entity_id, kind, person_id, settled_on, description, amount, currency) values
   ('a9000000-0000-4000-8000-000000000002', 'initial', 'a2000000-0000-4000-8000-000000000001', '2019-06-01', 'Cash', 100, 'ZAR');
 insert into public.beneficiaries (entity_id, person_id) values

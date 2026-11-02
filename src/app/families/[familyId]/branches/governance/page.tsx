@@ -4,6 +4,8 @@ import { Card, Field, Fold, Notice, Row, Rows, Select } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
 import { BODY_HINTS, BODY_KINDS, MEMBER_ROLES, formatDate } from "@/lib/governance";
 import { displayNames, type PersonSummary } from "@/lib/people";
+import { QUORUM_RULES } from "@/lib/meetings";
+import { saveBodyQuorum } from "../../meetings/actions";
 import { BranchesFrame } from "../BranchesFrame";
 import { addBody, addSeat, endSeat, removeBody, removeSeat, saveBody } from "../governance-actions";
 
@@ -17,6 +19,8 @@ type Body = {
   purpose: string | null;
   meets: string | null;
   established_on: string | null;
+  quorum_rule: string | null;
+  quorum_number: number | null;
 };
 type Seat = { id: string; body_id: string; person_id: string; role: keyof typeof MEMBER_ROLES; from_date: string | null; to_date: string | null };
 
@@ -39,7 +43,7 @@ export default async function GovernancePage({
   let branches: { id: string; name: string }[] = [];
   if (ctx.db) {
     const [b, s, p, br] = await Promise.all([
-      ctx.db.from("governance_bodies").select("id, kind, name, branch_id, purpose, meets, established_on"),
+      ctx.db.from("governance_bodies").select("id, kind, name, branch_id, purpose, meets, established_on, quorum_rule, quorum_number"),
       ctx.db.from("body_members").select("id, body_id, person_id, role, from_date, to_date"),
       ctx.db.from("people").select("id, full_names, surname, known_as, birth_year, member_type").order("surname"),
       ctx.db.from("branches").select("id, name").order("name"),
@@ -80,9 +84,22 @@ export default async function GovernancePage({
           <Card
             key={body.id}
             title={body.name}
-            description={[BODY_KINDS[body.kind], branchName(body.branch_id), body.meets ? `Meets: ${body.meets}` : null, body.established_on ? `Since ${formatDate(body.established_on)}` : null]
+            description={[
+              BODY_KINDS[body.kind],
+              branchName(body.branch_id),
+              body.meets ? `Meets: ${body.meets}` : null,
+              body.established_on ? `Since ${formatDate(body.established_on)}` : null,
+              body.quorum_rule
+                ? `Quorum: ${body.quorum_rule === "number" ? body.quorum_number : body.quorum_rule === "majority" ? "a majority" : "everyone"}`
+                : "Quorum not recorded",
+            ]
               .filter(Boolean)
               .join(" · ")}
+            actions={
+              <Link href={`/families/${familyId}/meetings?who=${encodeURIComponent(`governance:${body.id}`)}`} className="btn-secondary">
+                Meetings &amp; resolutions
+              </Link>
+            }
           >
             {body.purpose && <p className="mb-4 whitespace-pre-line text-ink-2">{body.purpose}</p>}
             {current.length === 0 ? (
@@ -129,6 +146,20 @@ export default async function GovernancePage({
                       <textarea id={`purpose-${body.id}`} name="purpose" rows={3} defaultValue={body.purpose ?? ""} className="text-area" />
                     </div>
                     <SubmitButton>Save changes</SubmitButton>
+                  </form>
+                </Fold>
+                <Fold label="Quorum">
+                  <form action={saveBodyQuorum.bind(null, familyId, body.id)} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                    <Select
+                      id={`quorum-${body.id}`}
+                      label="How many must be present"
+                      name="quorum_rule"
+                      options={QUORUM_RULES}
+                      includeBlank="Not recorded"
+                      defaultValue={body.quorum_rule}
+                    />
+                    <Field id={`quorum-n-${body.id}`} label="Number (if a set number)" name="quorum_number" defaultValue={body.quorum_number} />
+                    <SubmitButton>Save</SubmitButton>
                   </form>
                 </Fold>
                 {ctx.canEdit && (

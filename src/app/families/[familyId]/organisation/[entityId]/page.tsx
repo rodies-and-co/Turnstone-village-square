@@ -18,6 +18,10 @@ import { ComplianceList } from "../ComplianceList";
 import { StructureChart, chartFromData } from "../StructureChart";
 import { loadCalendars, namer } from "../compliance-data";
 import { loadOrganisationData } from "../organisation-data";
+import { saveEntityQuorum } from "../../meetings/actions";
+import { DecisionsArea, VIEWS, type View } from "../../meetings/DecisionsArea";
+import { basisLabels, decisionChoices } from "../../meetings/meetings-data";
+import { QUORUM_RULES, boardName, hasMembers, membersName } from "@/lib/meetings";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +42,6 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 
 const LATER: Partial<Record<Tab, string>> = {
-  decisions: "Minutes, written resolutions and file notes come with Meetings, resolutions and notes.",
   todo: "This entity's items from the family's one to-do list come with Organising.",
   risks: "This entity's view of the family's one risk register comes with Risk Management.",
   finances: "Assets, liabilities, and the income and capital pools come with Finances.",
@@ -64,6 +67,10 @@ type Entity = {
   branch_id: string | null;
   status: string;
   dissolved_on: string | null;
+  board_quorum_rule: string | null;
+  board_quorum_number: number | null;
+  members_quorum_rule: string | null;
+  members_quorum_number: number | null;
 };
 type Appointment = {
   id: string;
@@ -76,6 +83,9 @@ type Appointment = {
   licensed: boolean;
   appointed_on: string | null;
   ceased_on: string | null;
+  basis: string | null;
+  decision_id: string | null;
+  basis_note: string | null;
 };
 type Addr = { id: string; line1: string; line2: string | null; city: string; region: string | null; postal_code: string | null; country: string };
 
@@ -84,7 +94,7 @@ export default async function EntityPage({
   searchParams,
 }: {
   params: Promise<{ familyId: string; entityId: string }>;
-  searchParams: Promise<{ tab?: string; register?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ tab?: string; register?: string; view?: string; saved?: string; error?: string }>;
 }) {
   const { familyId, entityId } = await params;
   const sp = await searchParams;
@@ -104,7 +114,10 @@ export default async function EntityPage({
       .from("entity_standards")
       .select("*")
       .then(({ data }) => ({ data: matchStandard((data ?? []) as EntityStandard[], entity) })),
-    db.from("appointments").select("id, role, person_id, organisation_id, holder_entity_id, resident, identity_verified, licensed, appointed_on, ceased_on").eq("entity_id", entityId),
+    db
+      .from("appointments")
+      .select("id, role, person_id, organisation_id, holder_entity_id, resident, identity_verified, licensed, appointed_on, ceased_on, basis, decision_id, basis_note")
+      .eq("entity_id", entityId),
     db.from("people").select("id, full_names, surname, known_as, birth_year, member_type").order("surname"),
     db.from("outside_organisations").select("id, name, kind, licensed").order("name"),
     db.from("branches").select("id, name").order("name"),
@@ -163,6 +176,13 @@ export default async function EntityPage({
   const open = checklist.filter((c) => !c.ok).length;
   const roleOrder = Object.keys(APPOINTMENT_ROLES);
   const sortedCurrent = [...current].sort((a, b) => roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role));
+  // How each appointment was decided, and the passed decisions to choose from.
+  const [basisOf, apptDecisions] =
+    tab === "officers"
+      ? await Promise.all([basisLabels(ctx, entityId), ctx.canEdit ? decisionChoices(ctx, entityId, { passedOnly: true }) : Promise.resolve([] as [string, string][])])
+      : [() => null, [] as [string, string][]];
+  const quorumWords = (rule: string | null, n: number | null) =>
+    rule === "number" ? `${n} ${n === 1 ? "person" : "people"} entitled to vote` : rule === "majority" ? "A majority of those entitled to vote" : rule === "all" ? "Everyone entitled to vote" : null;
   const yearEnd = entity.year_end_month ? `${entity.year_end_day} ${MONTHS_SHORT[entity.year_end_month - 1]}` : null;
 
   return (
@@ -300,6 +320,37 @@ export default async function EntityPage({
             )}
 
             <Card
+              title="Quorum"
+              description="How many must be present for a meeting to make decisions, as the constitution or articles say. Meetings check it when their record is confirmed."
+            >
+              <Facts
+                items={[
+                  [boardName(entity.entity_type), quorumWords(entity.board_quorum_rule, entity.board_quorum_number) ?? "Not recorded yet"],
+                  ...(hasMembers(entity.entity_type)
+                    ? ([[membersName(entity.entity_type), quorumWords(entity.members_quorum_rule, entity.members_quorum_number) ?? "Not recorded yet"]] as [string, string][])
+                    : []),
+                ]}
+              />
+              {ctx.canEdit && (
+                <Fold label="Change the quorum">
+                  <form action={saveEntityQuorum.bind(null, familyId, entityId)} className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Select label={`${boardName(entity.entity_type)}: quorum`} name="board_quorum_rule" options={QUORUM_RULES} includeBlank="Not recorded" defaultValue={entity.board_quorum_rule} />
+                      <Field label="Number (if a set number)" name="board_quorum_number" defaultValue={entity.board_quorum_number} />
+                      {hasMembers(entity.entity_type) && (
+                        <>
+                          <Select label={`${membersName(entity.entity_type)}: quorum`} name="members_quorum_rule" options={QUORUM_RULES} includeBlank="Not recorded" defaultValue={entity.members_quorum_rule} />
+                          <Field label="Number (if a set number)" name="members_quorum_number" defaultValue={entity.members_quorum_number} />
+                        </>
+                      )}
+                    </div>
+                    <SubmitButton>Save the quorum</SubmitButton>
+                  </form>
+                </Fold>
+              )}
+            </Card>
+
+            <Card
               title="Entity Standard"
               actions={
                 standard && (
@@ -355,6 +406,7 @@ export default async function EntityPage({
                         a.resident ? `Resident in ${entity.jurisdiction}` : null,
                         a.identity_verified ? "Identity verified" : null,
                         a.licensed ? "Licensed" : null,
+                        basisOf(a) ? `Decided by: ${basisOf(a)}` : null,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -381,6 +433,7 @@ export default async function EntityPage({
                     organisations={[...orgs.entries()]}
                     entities={[...entityNames.entries()].filter(([id]) => id !== entityId)}
                     jurisdiction={entity.jurisdiction}
+                    decisions={apptDecisions}
                   />
                 </Fold>
               )}
@@ -419,6 +472,17 @@ export default async function EntityPage({
 
         {tab === "history" && <HistoryCard ctx={ctx} entityId={entityId} />}
 
+        {tab === "decisions" && (
+          <DecisionsArea
+            ctx={ctx}
+            familyId={familyId}
+            scope={{ entityId }}
+            view={(VIEWS.find(([v]) => v === sp.view)?.[0] ?? "meetings") as View}
+            here={`/families/${familyId}/organisation/${entityId}?tab=decisions`}
+            names={names}
+          />
+        )}
+
         {LATER[tab] && (
           <Card title={TABS.find(([t]) => t === tab)![1]}>
             <p className="text-ink-2">{LATER[tab]}</p>
@@ -440,6 +504,10 @@ const TABLE_LABELS: Record<string, string> = {
   beneficiaries: "Beneficiary",
   beneficiary_classes: "Class of beneficiaries",
   beneficiary_class_members: "Class member",
+  meetings: "Meeting",
+  written_resolutions: "Written resolution",
+  file_notes: "File note",
+  compliance_filings: "Filing record",
 };
 
 async function HistoryCard({ ctx, entityId }: { ctx: Awaited<ReturnType<typeof getFamilyContext>>; entityId: string }) {

@@ -50,6 +50,9 @@ export type Transaction = ShareTransaction & {
   updated_at: string;
   resolution: string | null;
   consideration: string | null;
+  basis: string | null;
+  decision_id: string | null;
+  basis_note: string | null;
 };
 export type Appointment = {
   id: string;
@@ -95,6 +98,9 @@ export async function loadOrganisationData(ctx: FamilyContext) {
     updated_at: String(t.updated_at),
     resolution: t.resolution as string | null,
     consideration: t.consideration as string | null,
+    basis: (t.basis as string | null) ?? null,
+    decision_id: (t.decision_id as string | null) ?? null,
+    basis_note: (t.basis_note as string | null) ?? null,
     to: holderFrom(t, "to_"),
     from: holderFrom(t, "from_"),
   }));
