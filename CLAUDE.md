@@ -101,6 +101,9 @@ These rules are permanent. Follow them in every change.
   parent") so each small form only shows the fields that apply. Not Lovable.
 - Keep navigation simple: one to-do list (with views), no scattered duplicates.
 - The family's governing document is always called the "Family Constitution".
+- British English and British conventions everywhere: spelling (organisation,
+  licence), "Postcode" not "Zip code", "County or region" not "State", dates as
+  day month year (e.g. 2 November 2026, or 02/11/2026).
 - Every button gives feedback: it shows it is working straight away (e.g.
   "Saving…"), and a message confirms what happened. Removing anything asks
   "Are you sure?" first.

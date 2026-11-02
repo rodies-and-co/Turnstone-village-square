@@ -132,11 +132,17 @@ export async function addObligation(id: string, form: FormData) {
   const months = int(v("offset_months") || "0", 0, 36);
   const days = int(v("offset_days") || "0", 0, 365);
   if (months === null || days === null) back(id, "Months and days should be whole numbers.");
-  const fixed = v("fixed_date"); // "MM-DD"
+  const fixed = v("fixed_date"); // day/month
   const alt = v("alt_date");
-  const md = (s: string) => (/^\d{2}-\d{2}$/.test(s) ? s.split("-").map(Number) : null);
-  if ((basis === "fixed_date" || basis === "half_year") && !md(fixed)) back(id, "Please give the date as month and day, e.g. 05-31.");
-  if (basis === "half_year" && !md(alt)) back(id, "Please give the second date as month and day, e.g. 11-30.");
+  // Day/month, the British way: "31/05" is 31 May. Returns [month, day].
+  const md = (s: string) => {
+    const m = /^(\d{1,2})[/.-](\d{1,2})$/.exec(s);
+    if (!m) return null;
+    const [day, month] = [Number(m[1]), Number(m[2])];
+    return month >= 1 && month <= 12 && day >= 1 && day <= new Date(Date.UTC(2024, month, 0)).getUTCDate() ? [month, day] : null;
+  };
+  if ((basis === "fixed_date" || basis === "half_year") && !md(fixed)) back(id, "Please give the date as day/month, e.g. 31/05 for 31 May.");
+  if (basis === "half_year" && !md(alt)) back(id, "Please give the second date as day/month, e.g. 30/11 for 30 November.");
   const key = (v("key") || name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")).slice(0, 60);
   if (!KEY.test(key)) back(id, "Please give a short key in small letters, e.g. annual_return.");
   const roles = form.getAll("event_roles").map(String).filter(Boolean);

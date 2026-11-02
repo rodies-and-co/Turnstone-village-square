@@ -193,8 +193,8 @@ export default async function StandardPage({
                   />
                   <Field label="Months after" name="offset_months" type="number" defaultValue={0} />
                   <Field label="Days after" name="offset_days" type="number" defaultValue={0} />
-                  <Field label="Fixed date (MM-DD)" name="fixed_date" hint="e.g. 05-31" />
-                  <Field label="Second date (MM-DD)" name="alt_date" hint="Half-year only, e.g. 11-30" />
+                  <Field label="Fixed date (day/month)" name="fixed_date" hint="e.g. 31/05 for 31 May" />
+                  <Field label="Second date (day/month)" name="alt_date" hint="Half-year only, e.g. 30/11 for 30 November" />
                 </div>
                 <fieldset>
                   <legend className="mb-1 text-sm font-medium text-ink">For appointments: which roles (none ticked = all)</legend>

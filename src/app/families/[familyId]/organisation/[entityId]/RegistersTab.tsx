@@ -72,7 +72,7 @@ function Grid({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
 }
 
 const addressRow = (type: string, a: Addr) => [type, a.line1, a.line2 ?? "", a.city, a.region ?? "", a.postal_code ?? "", a.country];
-const ADDRESS_HEAD = ["Address Type", "Address 1", "Address 2", "City", "State", "Zip Code", "Country"];
+const ADDRESS_HEAD = ["Address Type", "Address 1", "Address 2", "Town or City", "County or Region", "Postcode", "Country"];
 
 // The identity part of a block, for a person or a corporate holder.
 function Identity({ person, corporate, unseen }: { person?: PersonInfo; corporate?: CorporateInfo; unseen?: boolean }) {
