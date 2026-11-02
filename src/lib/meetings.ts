@@ -281,5 +281,89 @@ export function actionText(action: string | null, inMeeting: boolean) {
     return `${when}, the share transaction goes on the register of members.`;
   if (action === "note_resignation")
     return "A note: the resignation has been recorded and the appointment has ended.";
+  if (action === "distribution")
+    return `${when}, the distribution is declared. Its payment is then recorded under Distributions.`;
+  if (action === "dividend")
+    return `${when}, the dividend is declared, with a line for each member on the register. Payments are recorded under Distributions.`;
   return null;
+}
+
+export const POOLS = {
+  income: "Income pool",
+  capital: "Capital pool",
+} as const;
+export const DISTRIBUTION_FORMS = {
+  cash: "Cash",
+  in_specie: "In specie (an asset)",
+  loan: "Loan",
+  other: "Other",
+} as const;
+export const DIVIDEND_KINDS = {
+  final: "Final",
+  interim: "Interim",
+  special: "Special",
+} as const;
+export const DIVIDEND_FORMS = {
+  cash: "Cash",
+  scrip: "Scrip (shares instead of cash)",
+  in_specie: "In specie (an asset)",
+} as const;
+export const PAYOUT_STATUS = {
+  proposed: "Proposed – waiting for its decision",
+  declared: "Declared – to be paid",
+  paid: "Paid",
+  cancelled: "Cancelled",
+} as const;
+
+const money2 = (currency: string, n: number) =>
+  `${currency} ${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+export function distributionWording(o: {
+  name: string;
+  currency: string;
+  amount: number;
+  pool: "income" | "capital";
+  form: keyof typeof DISTRIBUTION_FORMS;
+  entityType: string;
+  clause?: string | null;
+  purpose?: string | null;
+  letterOfWishes?: boolean;
+}) {
+  const of = o.entityType === "foundation" ? "foundation" : "trust fund";
+  const how =
+    o.form === "cash"
+      ? ""
+      : o.form === "in_specie"
+        ? ", in specie"
+        : o.form === "loan"
+          ? ", by way of a loan"
+          : "";
+  return {
+    title: `Distribution to ${o.name}`,
+    wording:
+      `That ${money2(o.currency, o.amount)} be distributed to ${o.name} from the ${o.pool} of the ${of}${how}` +
+      `${o.clause ? `, under ${o.clause}` : ""}${o.purpose ? `, for ${o.purpose}` : ""}.` +
+      (o.letterOfWishes
+        ? ` The ${o.entityType === "foundation" ? "council" : "trustees"} considered the letter of wishes.`
+        : ""),
+  };
+}
+
+export function dividendWording(o: {
+  kind: keyof typeof DIVIDEND_KINDS;
+  currency: string;
+  perShare: number;
+  className: string;
+  recordDate?: string | null;
+  paymentDate?: string | null;
+  form: keyof typeof DIVIDEND_FORMS;
+}) {
+  const per = `${o.currency} ${o.perShare.toLocaleString("en-GB", { maximumFractionDigits: 6 })}`;
+  const k = DIVIDEND_KINDS[o.kind].toLowerCase();
+  return {
+    title: `Declaration of a ${k} dividend on the ${o.className} shares`,
+    wording:
+      `That a ${k} dividend of ${per} per ${o.className} share be declared${o.form === "cash" ? "" : o.form === "scrip" ? ", paid in shares" : ", paid in specie"}` +
+      `${o.paymentDate ? `, payable on ${longDate(o.paymentDate)}` : ""}, to the members on the register ${o.recordDate ? `on ${longDate(o.recordDate)}` : "on the date of this decision"}.`,
+  };
 }

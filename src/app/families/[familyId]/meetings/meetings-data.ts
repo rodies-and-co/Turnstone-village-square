@@ -82,6 +82,8 @@ export type Decision = {
     | "end_appointment"
     | "note_resignation"
     | "share_transaction"
+    | "distribution"
+    | "dividend"
     | null;
   appointment_id: string | null;
   proposed: Record<string, unknown> | null;

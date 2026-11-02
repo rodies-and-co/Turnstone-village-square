@@ -18,7 +18,12 @@ export type DraftItem = {
   title: string;
   wording: string;
   action:
-    "appoint" | "end_appointment" | "note_resignation" | "share_transaction";
+    | "appoint"
+    | "end_appointment"
+    | "note_resignation"
+    | "share_transaction"
+    | "distribution"
+    | "dividend";
   appointment_id?: string;
   proposed?: Record<string, unknown>;
   noted?: boolean; // a note (e.g. a resignation) rather than a decision, in a meeting

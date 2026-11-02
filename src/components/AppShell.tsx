@@ -17,6 +17,7 @@ type Section =
   | "branches"
   | "organisation"
   | "meetings"
+  | "distributions"
   | "standards"
   | null;
 
@@ -29,7 +30,7 @@ const LATER_GROUPS: [string, Item[]][] = [
     [
       ["Meetings & resolutions", "meetings", "/meetings"],
       "Projects",
-      "Distributions",
+      ["Distributions & dividends", "distributions", "/distributions"],
       "Share transactions",
       "Risk management",
     ],

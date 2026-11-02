@@ -100,6 +100,9 @@ export const SAVED_MESSAGES = {
   basis_saved: "Saved. A Manager who didn't make the change approves the transaction.",
   change_drafted: "The decision has been drafted here. The change takes effect once this meeting is confirmed or this resolution passes.",
   resignation_noted: "Resignation recorded, and noted here for the board.",
+  payout_drafted: "Drafted here as a decision. It is declared once this meeting is confirmed or this resolution passes; then record its payment under Distributions.",
+  payout_paid: "Payment recorded.",
+  payout_cancelled: "Cancelled. It stays on record.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 
