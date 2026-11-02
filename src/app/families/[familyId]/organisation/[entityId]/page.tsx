@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell, PageTitle } from "@/components/AppShell";
-import { ConfirmRemove, SubmitButton, Toast } from "@/components/feedback";
+import { ConfirmRemove, EndWithDate, SubmitButton, Toast } from "@/components/feedback";
 import { Card, Chip, Facts, Field, Fold, Notice, Row, Rows, Select, UnderlineTabs } from "@/components/ui";
 import { APPOINTMENT_ROLES, ENTITY_TYPES, ROLES_FOR, matchStandard, setupChecklist, type AppointmentRole, type EntityType } from "@/lib/entity-checklist";
 import { getFamilyContext } from "@/lib/family-context";
@@ -359,7 +359,15 @@ export default async function EntityPage({
                         .filter(Boolean)
                         .join(" · ")}
                     >
-                      {ctx.canEdit && <ConfirmRemove action={endAppointment.bind(null, familyId, entityId, a.id)} what={`${holderText(a)} as ${APPOINTMENT_ROLES[a.role].toLowerCase()}`} label="End" />}
+                      {ctx.canEdit && (
+                        <EndWithDate
+                          action={endAppointment.bind(null, familyId, entityId, a.id)}
+                          what={`${holderText(a)} as ${APPOINTMENT_ROLES[a.role].toLowerCase()}`}
+                          label="End appointment"
+                          question="Date of cessation"
+                          since={a.appointed_on}
+                        />
+                      )}
                     </Row>
                   ))}
                 </Rows>
@@ -378,7 +386,7 @@ export default async function EntityPage({
               )}
             </Card>
             {past.length > 0 && (
-              <Card title="Past appointments">
+              <Card title="Past appointments" description="Former officers stay in the registers with their date of cessation. Remove one only if it was recorded in error.">
                 <Rows>
                   {past.map((a) => (
                     <Row
@@ -386,7 +394,13 @@ export default async function EntityPage({
                       title={holder(a)}
                       meta={[APPOINTMENT_ROLES[a.role], [formatDate(a.appointed_on), formatDate(a.ceased_on)].filter(Boolean).join(" to ")].join(" · ")}
                     >
-                      {ctx.canEdit && <ConfirmRemove action={removeAppointment.bind(null, familyId, entityId, a.id)} what={`this past appointment of ${holderText(a)}`} />}
+                      {ctx.canEdit && (
+                        <ConfirmRemove
+                          action={removeAppointment.bind(null, familyId, entityId, a.id)}
+                          what={`this appointment of ${holderText(a)}, recorded in error,`}
+                          label="Remove"
+                        />
+                      )}
                     </Row>
                   ))}
                 </Rows>

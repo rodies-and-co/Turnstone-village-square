@@ -151,3 +151,50 @@ export function Toast({ message, kind = "success" }: { message: string; kind?: "
     </div>
   );
 }
+
+// "End" for something that stays in the history (an appointment, a
+// beneficiary): asks for the date it ended (today unless changed), which
+// can't be before it started or in the future.
+export function EndWithDate({
+  action,
+  what,
+  label = "End",
+  question = "Ended on",
+  since,
+}: {
+  action: (form: FormData) => Promise<void>;
+  what: string;
+  label?: string;
+  question?: string;
+  since?: string | null;
+}) {
+  const [asking, setAsking] = useState(false);
+  const openRef = useRef<HTMLButtonElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  useEffect(() => {
+    if (asking) dateRef.current?.focus();
+  }, [asking]);
+  if (!asking) {
+    return (
+      <button ref={openRef} type="button" className="btn-quiet" aria-label={`${label} ${what}`} onClick={() => setAsking(true)}>
+        {label}
+      </button>
+    );
+  }
+  const id = `end-${what.replace(/[^a-zA-Z0-9]/g, "")}`;
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-2" role="group" aria-label={`${label} ${what}`}>
+      <div>
+        <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink">
+          {question} (required)
+        </label>
+        <input ref={dateRef} id={id} name="ended_on" type="date" required defaultValue={today} min={since ?? undefined} max={today} className="text-input" />
+      </div>
+      <SubmitButton pendingText="Saving…">{label}</SubmitButton>
+      <button type="button" className="btn-secondary" onClick={() => setAsking(false)}>
+        Cancel
+      </button>
+    </form>
+  );
+}

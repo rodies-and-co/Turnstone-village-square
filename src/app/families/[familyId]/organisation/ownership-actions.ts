@@ -296,9 +296,15 @@ export async function addBeneficiary(familyId: string, entityId: string, form: F
   go(to, error ? ownershipError(error.message) : undefined, "beneficiary_added");
 }
 
-export async function endBeneficiary(familyId: string, entityId: string, id: string) {
+export async function endBeneficiary(familyId: string, entityId: string, id: string, form: FormData) {
   const ctx = await editor(familyId, entityId);
-  const { error } = await ctx.db!.from("beneficiaries").update({ ceased_on: new Date().toISOString().slice(0, 10) }).eq("id", id).eq("entity_id", entityId);
+  const endedOn = String(form.get("ended_on") ?? "").trim();
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  if (!isDate(endedOn)) go(back(familyId, entityId), "Please give the date it ended.");
+  if (endedOn > today) go(back(familyId, entityId), "The date it ended can't be in the future.");
+  const { data, error } = await ctx.db!.from("beneficiaries").update({ ceased_on: endedOn }).eq("id", id).eq("entity_id", entityId).is("ceased_on", null).select("id");
+  if (error && /check constraint/.test(error.message)) go(back(familyId, entityId), "The date it ended can't be before the date they became a beneficiary.");
+  if (!error && !data?.length) go(back(familyId, entityId), "That has already ended, or couldn't be found. Please look again.");
   go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "beneficiary_ended");
 }
 
@@ -334,12 +340,20 @@ export async function addClassMember(familyId: string, entityId: string, classId
   go(to, error ? ownershipError(error.message) : undefined, "class_member_added");
 }
 
-export async function endClassMember(familyId: string, entityId: string, id: string) {
+export async function endClassMember(familyId: string, entityId: string, id: string, form: FormData) {
   const ctx = await editor(familyId, entityId);
-  const { error } = await ctx
+  const endedOn = String(form.get("ended_on") ?? "").trim();
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  if (!isDate(endedOn)) go(back(familyId, entityId), "Please give the date it ended.");
+  if (endedOn > today) go(back(familyId, entityId), "The date it ended can't be in the future.");
+  const { data, error } = await ctx
     .db!.from("beneficiary_class_members")
-    .update({ ceased_on: new Date().toISOString().slice(0, 10) })
+    .update({ ceased_on: endedOn })
     .eq("id", id)
-    .eq("entity_id", entityId);
+    .eq("entity_id", entityId)
+    .is("ceased_on", null)
+    .select("id");
+  if (error && /check constraint/.test(error.message)) go(back(familyId, entityId), "The date can't be before the date they joined the class.");
+  if (!error && !data?.length) go(back(familyId, entityId), "That has already ended, or couldn't be found. Please look again.");
   go(back(familyId, entityId), error ? ownershipError(error.message) : undefined, "class_member_ended");
 }

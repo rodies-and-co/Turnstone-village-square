@@ -317,15 +317,23 @@ export async function addAppointment(familyId: string, entityId: string, form: F
 }
 
 // Ending an appointment keeps it in the history.
-export async function endAppointment(familyId: string, entityId: string, appointmentId: string) {
+export async function endAppointment(familyId: string, entityId: string, appointmentId: string, form: FormData) {
   const back = `/families/${familyId}/organisation/${entityId}?tab=officers`;
   const ctx = await getFamilyContext(familyId);
   if (!ctx.db || !ctx.canEdit) go(back, "You don't have permission to change this entity.");
-  const { error } = await ctx.db
+  const endedOn = String(form.get("ended_on") ?? "").trim();
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  if (!isDate(endedOn)) go(back, "Please give the date it ended.");
+  if (endedOn > today) go(back, "The date it ended can't be in the future.");
+  const { data, error } = await ctx.db
     .from("appointments")
-    .update({ ceased_on: new Date().toISOString().slice(0, 10) })
+    .update({ ceased_on: endedOn })
     .eq("id", appointmentId)
-    .eq("entity_id", entityId);
+    .eq("entity_id", entityId)
+    .is("ceased_on", null)
+    .select("id");
+  if (error && /check constraint/.test(error.message)) go(back, "The date it ended can't be before the date of appointment.");
+  if (!error && !data?.length) go(back, "That appointment has already ended, or couldn't be found. Please look again.");
   go(back, error ? orgError(error.message) : undefined, "appointment_ended");
 }
 

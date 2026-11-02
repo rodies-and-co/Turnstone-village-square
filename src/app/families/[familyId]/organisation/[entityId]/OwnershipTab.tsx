@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ConfirmRemove, SubmitButton } from "@/components/feedback";
+import { ConfirmRemove, EndWithDate, SubmitButton } from "@/components/feedback";
 import { Card, Chip, Field, Fold, Notice, Row, Rows, Select } from "@/components/ui";
 import type { FamilyContext } from "@/lib/family-context";
 import { formatDate } from "@/lib/governance";
@@ -395,7 +395,14 @@ export async function OwnershipTab({
                         .filter(Boolean)
                         .join(" · ")}
                     >
-                      {ctx.canEdit && <ConfirmRemove action={endBeneficiary.bind(null, familyId, entity.id, String(b.id))} what={b.cause ? "this cause" : nameOf(holderFrom(b))} label="End" />}
+                      {ctx.canEdit && (
+                        <EndWithDate
+                          action={endBeneficiary.bind(null, familyId, entity.id, String(b.id))}
+                          what={b.cause ? "this cause" : nameOf(holderFrom(b))}
+                          question="No longer a beneficiary from"
+                          since={(b.added_on as string | null) ?? null}
+                        />
+                      )}
                     </Row>
                   ))}
               </Rows>
@@ -440,7 +447,15 @@ export async function OwnershipTab({
                         <ul className="mt-1 divide-y divide-border">
                           {members.map((m) => (
                             <Row key={m.id} title={link({ kind: "person", id: m.person_id })} meta={m.added_on ? `Since ${formatDate(m.added_on)}` : undefined}>
-                              {ctx.canEdit && <ConfirmRemove action={endClassMember.bind(null, familyId, entity.id, m.id)} what={`${nameOf({ kind: "person", id: m.person_id })} from ${c.name}`} label="Take out" />}
+                              {ctx.canEdit && (
+                                <EndWithDate
+                                  action={endClassMember.bind(null, familyId, entity.id, m.id)}
+                                  what={`${nameOf({ kind: "person", id: m.person_id })} from ${c.name}`}
+                                  label="Take out"
+                                  question="Out of the class from"
+                                  since={m.added_on}
+                                />
+                              )}
                             </Row>
                           ))}
                         </ul>
