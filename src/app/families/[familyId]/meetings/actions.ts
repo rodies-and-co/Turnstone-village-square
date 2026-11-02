@@ -190,15 +190,13 @@ export async function addAttendee(
     ["apologies", "absent"].includes(text(form, "attendance"))
       ? text(form, "attendance")
       : "present";
-  const { error } = await ctx
-    .db!.from("meeting_attendees")
-    .insert({
-      meeting_id: meetingId,
-      ...holder,
-      capacity,
-      attendance,
-      represented_by: optional(form, "represented_by"),
-    });
+  const { error } = await ctx.db!.from("meeting_attendees").insert({
+    meeting_id: meetingId,
+    ...holder,
+    capacity,
+    attendance,
+    represented_by: optional(form, "represented_by"),
+  });
   go(to, error ? meetingsError(error.message) : undefined, "attendee_added");
 }
 
@@ -235,16 +233,14 @@ export async function addAllVoters(familyId: string, meetingId: string) {
   const have = new Set(((listed ?? []) as H[]).map(key));
   const add = ((voters ?? []) as H[]).filter((v) => !have.has(key(v)));
   if (add.length === 0) go(to, "Everyone entitled to vote is already listed.");
-  const { error } = await ctx
-    .db!.from("meeting_attendees")
-    .insert(
-      add.map((v) => ({
-        meeting_id: meetingId,
-        person_id: v.person_id,
-        organisation_id: v.organisation_id,
-        holder_entity_id: v.holder_entity_id,
-      })),
-    );
+  const { error } = await ctx.db!.from("meeting_attendees").insert(
+    add.map((v) => ({
+      meeting_id: meetingId,
+      person_id: v.person_id,
+      organisation_id: v.organisation_id,
+      holder_entity_id: v.holder_entity_id,
+    })),
+  );
   go(to, error ? meetingsError(error.message) : undefined, "attendees_added");
 }
 
@@ -319,15 +315,13 @@ export async function addDecision(
     .order("item", { ascending: false })
     .limit(1);
   const item = ((items?.[0]?.item as number | undefined) ?? 0) + 1;
-  const { error } = await ctx
-    .db!.from("decisions")
-    .insert({
-      [column]: parentId,
-      item,
-      title,
-      wording,
-      background: optional(form, "background"),
-    });
+  const { error } = await ctx.db!.from("decisions").insert({
+    [column]: parentId,
+    item,
+    title,
+    wording,
+    background: optional(form, "background"),
+  });
   go(to, error ? meetingsError(error.message) : undefined, "decision_added");
 }
 
@@ -431,6 +425,8 @@ export async function approveMinutes(
 ) {
   const to = meetingPath(familyId, meetingId);
   const ctx = await editor(familyId, to);
+  if (!ctx.canManage)
+    go(to, "Only a Manager can record the minutes as approved.");
   const date = text(form, "minutes_approved_on");
   const signer = text(form, "minutes_signed_by");
   if (!isDate(date))
@@ -617,16 +613,14 @@ export async function addAllSignatories(
   const have = new Set(((listed ?? []) as H[]).map(key));
   const add = ((voters ?? []) as H[]).filter((v) => !have.has(key(v)));
   if (add.length === 0) go(to, "Everyone entitled to vote is already listed.");
-  const { error } = await ctx
-    .db!.from("resolution_signatories")
-    .insert(
-      add.map((v) => ({
-        resolution_id: resolutionId,
-        person_id: v.person_id,
-        organisation_id: v.organisation_id,
-        holder_entity_id: v.holder_entity_id,
-      })),
-    );
+  const { error } = await ctx.db!.from("resolution_signatories").insert(
+    add.map((v) => ({
+      resolution_id: resolutionId,
+      person_id: v.person_id,
+      organisation_id: v.organisation_id,
+      holder_entity_id: v.holder_entity_id,
+    })),
+  );
   go(to, error ? meetingsError(error.message) : undefined, "signatories_added");
 }
 

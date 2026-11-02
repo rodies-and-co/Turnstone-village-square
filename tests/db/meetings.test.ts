@@ -274,15 +274,30 @@ describe("Meetings: recorded by one person, confirmed by another", () => {
         [m, OWN],
         /can't change/,
       );
+      // The minutes: written by the Administrator, approved by a Manager who didn't write them.
+      await switchUser(db, hub, ADMIN);
       await db.query(
         "update meetings set minutes = 'The minutes.', minutes_status = 'circulated' where id = $1",
         [m],
       );
       await refused(
         db,
+        "update meetings set minutes_status = 'approved', minutes_approved_on = current_date where id = $1",
+        [m],
+        /only a Manager/,
+      );
+      await switchUser(db, hub, MANAGER);
+      await refused(
+        db,
         "update meetings set minutes_status = 'approved' where id = $1",
         [m],
         /check constraint/,
+      );
+      await refused(
+        db,
+        "update meetings set minutes = 'Rewritten', minutes_status = 'approved', minutes_approved_on = current_date where id = $1",
+        [m],
+        /can't also record them as approved/,
       );
       await db.query(
         "update meetings set minutes_status = 'approved', minutes_approved_on = current_date, minutes_signed_by = $2 where id = $1",
@@ -764,6 +779,138 @@ describe("File notes", () => {
           ])
         ).written_by,
       ).toBe(ADMIN);
+    });
+  });
+});
+
+describe("Review fixes", () => {
+  it("the quorum counts only those still entitled to vote on the day", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const { m, d } = await heldBoardMeeting(db);
+      await db.query(
+        "update entities set board_quorum_rule = 'number', board_quorum_number = 2 where id = $1",
+        [HOLDINGS],
+      );
+      await db.query("update decisions set outcome = 'carried' where id = $1", [
+        d,
+      ]);
+      // South stopped being a director before the meeting.
+      await db.query(
+        "update appointments set ceased_on = current_date - 30 where entity_id = $1 and person_id = $2",
+        [HOLDINGS, SOUTH],
+      );
+      expect(
+        await one(db, "select * from public.meeting_quorum($1)", [m]),
+      ).toEqual({ entitled: 1, present: 1, needed: 2 });
+      await switchUser(db, hub, MANAGER);
+      await refused(
+        db,
+        "update meetings set status = 'confirmed' where id = $1",
+        [m],
+        /were present, and 2 were needed/,
+      );
+    });
+  });
+
+  it("who holds an appointment, and which role, can't be changed; it is ended and a new one recorded", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      await refused(
+        db,
+        "update appointments set person_id = $3 where entity_id = $1 and person_id = $2",
+        [HOLDINGS, SOUTH, OWN],
+        /can't be changed/,
+      );
+      await refused(
+        db,
+        "update appointments set role = 'secretary' where entity_id = $1 and person_id = $2",
+        [HOLDINGS, SOUTH],
+        /can't be changed/,
+      );
+    });
+  });
+
+  it("a share transaction can't rely on a deed of appointment, and the formation documents only cover formation", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      await refused(
+        db,
+        "update share_transactions set basis = 'instrument', basis_note = 'x' where id = $1",
+        [DRAFT_ISSUE],
+        /minute or resolution/,
+      );
+      await db.query(
+        "update entities set registered_on = '2020-01-01' where id = $1",
+        [HOLDINGS],
+      );
+      await db.query(
+        "update share_transactions set basis = 'formation', transaction_date = '2021-01-02' where id = $1",
+        [DRAFT_ISSUE],
+      );
+      await switchUser(db, hub, MANAGER);
+      await refused(
+        db,
+        "update share_transactions set status = 'approved' where id = $1",
+        [DRAFT_ISSUE],
+        /within 30 days of registration/,
+      );
+    });
+  });
+
+  it("a note about the whole family is for editors and whole-family Viewers only", async () => {
+    const seen = await as(hartley, await signedIn(ADMIN), async (db) => {
+      await db.query(
+        "insert into file_notes (title, body) values ('Family call', 'Private discussion.')",
+      );
+      const out: number[] = [];
+      for (const [u, aal] of [
+        [USERS.hartleyViewerWholeFamily, "aal1"],
+        [USERS.hartleyViewerBranch, "aal1"],
+        [USERS.hartleyViewerOwnRecord, "aal1"],
+      ] as const) {
+        await switchUser(db, hub, u, aal);
+        out.push(
+          await count(
+            db,
+            "select * from file_notes where title = 'Family call'",
+          ),
+        );
+      }
+      return out;
+    });
+    expect(seen).toEqual([1, 0, 0]);
+  });
+
+  it("a cancelled meeting can only be planned again; the voter list isn't open to callers directly", async () => {
+    await as(hartley, await signedIn(ADMIN), async (db) => {
+      const m = (
+        await one(
+          db,
+          "insert into meetings (body, entity_id, title, meeting_on) values ('board', $1, 'x', current_date - 1) returning id",
+          [HOLDINGS],
+        )
+      ).id;
+      await db.query("update meetings set status = 'cancelled' where id = $1", [
+        m,
+      ]);
+      await refused(
+        db,
+        "update meetings set status = 'held' where id = $1",
+        [m],
+        /planned again/,
+      );
+      await refused(
+        db,
+        "select * from private.voters('members', $1, null, current_date)",
+        [HOLDINGS],
+        /permission denied/,
+      );
+      await switchUser(db, hub, USERS.hartleyViewerBranch, "aal1");
+      expect(
+        await count(
+          db,
+          "select * from public.body_voters('members', $1, null, current_date)",
+          [HOLDINGS],
+        ),
+      ).toBe(0);
     });
   });
 });

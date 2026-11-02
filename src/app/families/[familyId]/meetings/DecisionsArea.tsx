@@ -632,7 +632,7 @@ export async function DecisionsArea({
                   ...(single ? [] : [bodyOf(m)]),
                   m.quorum_met ? "Present" : "Not present",
                   m.minutes_status === "approved"
-                    ? `Approved ${formatDate(m.minutes_approved_on)}${m.minutes_signed_by ? `, signed by ${names.get(m.minutes_signed_by) ?? "the chair"}` : ""}`
+                    ? `Approved ${formatDate(m.minutes_approved_on)}${m.minutes_signed_by ? `, signed by ${names.get(m.minutes_signed_by) ?? "someone you can't see"}` : ""}`
                     : MINUTES_STATUS[m.minutes_status],
                 ])}
             />

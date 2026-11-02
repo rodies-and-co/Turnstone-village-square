@@ -41,6 +41,7 @@ export type Meeting = {
   minutes_status: "draft" | "circulated" | "approved";
   minutes_approved_on: string | null;
   minutes_signed_by: string | null;
+  minutes_written_by: string[];
   prepared_by: string | null;
   edited_by: string[];
   confirmed_by: string | null;

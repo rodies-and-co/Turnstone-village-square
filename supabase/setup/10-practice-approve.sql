@@ -7,6 +7,8 @@
 --   - every meeting recorded as held (it confirms the record), oldest first;
 --   - every circulated written resolution with enough signatures (it confirms
 --     it has passed);
+--   - the circulated minutes of confirmed meetings (recorded as approved
+--     today, without a signatory);
 --   - every draft share transaction, oldest first;
 --   - every waiting removal request (once two-person removals are installed).
 -- All the normal checks still run (authorised shares, holdings, date order,
@@ -54,6 +56,14 @@ begin
         done_count := done_count + 1;
       exception when others then
         problems := problems || E'\n  Resolution (' || r.title || '): ' || regexp_replace(sqlerrm, '^Resolutions: ', '');
+      end;
+    end loop;
+    for r in execute 'select id, title, meeting_on from public.meetings where status = ''confirmed'' and minutes_status = ''circulated'' order by meeting_on' loop
+      begin
+        execute 'update public.meetings set minutes_status = ''approved'', minutes_approved_on = current_date where id = $1' using r.id;
+        done_count := done_count + 1;
+      exception when others then
+        problems := problems || E'\n  Minutes (' || r.title || ', ' || to_char(r.meeting_on, 'DD/MM/YYYY') || '): ' || regexp_replace(sqlerrm, '^Meetings: ', '');
       end;
     end loop;
   end if;

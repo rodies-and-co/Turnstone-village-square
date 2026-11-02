@@ -360,7 +360,11 @@ export default async function MeetingPage({
         <div className="print:hidden">
           <Card
             title="Who attended"
-            description="Those entitled to vote on the day, and anyone else in attendance (who can't vote)."
+            description={
+              ctx.canEdit
+                ? "Those entitled to vote on the day, and anyone else in attendance (who can't vote)."
+                : "Those entitled to vote on the day, and anyone else in attendance. People you can't see in the Tree aren't listed."
+            }
           >
             {attendees.length === 0 ? (
               <p className="border-y border-border py-3 text-ink-3">
@@ -727,7 +731,7 @@ export default async function MeetingPage({
               <p className="mb-3 text-sm text-ink-2">
                 Status: {MINUTES_STATUS[m.minutes_status]}
                 {m.minutes_status === "approved" &&
-                  ` on ${formatDate(m.minutes_approved_on)}${m.minutes_signed_by ? `, signed by ${names.get(m.minutes_signed_by) ?? "the chair"}` : ""}.`}
+                  ` on ${formatDate(m.minutes_approved_on)}${m.minutes_signed_by ? `, signed by ${names.get(m.minutes_signed_by) ?? "someone you can't see"}` : ""}.`}
               </p>
               {ctx.canEdit && m.minutes_status !== "approved" && (
                 <form
@@ -753,6 +757,17 @@ export default async function MeetingPage({
                 </form>
               )}
               {ctx.canEdit &&
+                m.status === "confirmed" &&
+                m.minutes_status !== "approved" &&
+                (!ctx.canManage || m.minutes_written_by.includes(me)) && (
+                  <p className="mt-3 text-sm text-ink-3">
+                    {ctx.canManage
+                      ? "You wrote or changed these minutes, so another Manager records them as approved."
+                      : "A Manager who didn't write the minutes records them as approved."}
+                  </p>
+                )}
+              {ctx.canManage &&
+                !m.minutes_written_by.includes(me) &&
                 m.status === "confirmed" &&
                 m.minutes_status !== "approved" && (
                   <Fold label="Record the minutes as approved and signed">

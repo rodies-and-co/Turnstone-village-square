@@ -158,6 +158,7 @@ create table public.meetings (
   minutes_status text not null default 'draft' check (minutes_status in ('draft', 'circulated', 'approved')),
   minutes_approved_on date,
   minutes_signed_by uuid references public.people (id) on delete set null,
+  minutes_written_by uuid[] not null default '{}', -- whoever wrote or changed the minutes: none of them may record them as approved
   prepared_by uuid,
   edited_by uuid[] not null default '{}', -- everyone who recorded or changed it: none of them may confirm it
   confirmed_by uuid,
@@ -309,7 +310,11 @@ declare
 begin
   select * into m from public.meetings where id = p_meeting;
   entitled := (select count(*) from private.voters(m.body, m.entity_id, m.governance_body_id, m.meeting_on));
-  present := (select count(*) from public.meeting_attendees a where a.meeting_id = p_meeting and a.capacity = 'voting' and a.attendance = 'present');
+  -- Only those entitled to vote on the day count, checked again now (an
+  -- appointment or the meeting date may have changed since they were added).
+  present := (select count(*) from public.meeting_attendees a
+              where a.meeting_id = p_meeting and a.capacity = 'voting' and a.attendance = 'present'
+                and private.is_voter(m.body, m.entity_id, m.governance_body_id, a.person_id, a.organisation_id, a.holder_entity_id, m.meeting_on));
   if m.body = 'board' then
     select e.board_quorum_rule, e.board_quorum_number into rule, n from public.entities e where e.id = m.entity_id;
   elsif m.body = 'members' then
@@ -321,7 +326,6 @@ begin
   return next;
 end;
 $$;
-grant execute on function private.meeting_quorum(uuid) to authenticated;
 
 -- The next number in a body's minute book or register of resolutions.
 create function private.next_number(p_table text, p_body text, p_entity uuid, p_gov uuid)
@@ -402,15 +406,33 @@ begin
     new.body := old.body;
     new.entity_id := old.entity_id;
     new.governance_body_id := old.governance_body_id;
+    new.minutes_written_by := old.minutes_written_by;
+    if new.minutes is distinct from old.minutes and not (auth.uid() = any (old.minutes_written_by)) then
+      new.minutes_written_by := old.minutes_written_by || auth.uid();
+    end if;
+    if old.status = 'cancelled' and new.status not in ('cancelled', 'planned') then
+      raise exception 'Meetings: a cancelled meeting can only be planned again.';
+    end if;
 
     if old.status = 'confirmed' then
-      -- Only the minutes can still change, until they are approved.
-      frozen := to_jsonb(old) - array['minutes', 'minutes_status', 'minutes_approved_on', 'minutes_signed_by', 'updated_at'];
-      if (to_jsonb(new) - array['minutes', 'minutes_status', 'minutes_approved_on', 'minutes_signed_by', 'updated_at']) is distinct from frozen then
-        raise exception 'Meetings: a confirmed meeting can''t be changed. Only its minutes can, until they are approved.';
-      end if;
       if old.minutes_status = 'approved' and (to_jsonb(new) - 'updated_at') is distinct from (to_jsonb(old) - 'updated_at') then
         raise exception 'Meetings: approved minutes can''t be changed.';
+      end if;
+      -- Only the minutes can still change, until they are approved.
+      frozen := to_jsonb(old) - array['minutes', 'minutes_status', 'minutes_approved_on', 'minutes_signed_by', 'minutes_written_by', 'updated_at'];
+      if (to_jsonb(new) - array['minutes', 'minutes_status', 'minutes_approved_on', 'minutes_signed_by', 'minutes_written_by', 'updated_at']) is distinct from frozen then
+        raise exception 'Meetings: a confirmed meeting can''t be changed. Only its minutes can, until they are approved.';
+      end if;
+      if new.minutes_status = 'approved' and old.minutes_status <> 'approved' then
+        if not private.can_manage() then
+          raise exception 'Meetings: only a Manager can record the minutes as approved.';
+        end if;
+        if auth.uid() = any (new.minutes_written_by) then
+          raise exception 'Meetings: whoever wrote or changed the minutes can''t also record them as approved. Ask another Manager.';
+        end if;
+        if new.minutes is distinct from old.minutes then
+          raise exception 'Meetings: record the minutes as approved as they were circulated. Change them first, then ask another Manager.';
+        end if;
       end if;
       return new;
     end if;
@@ -605,7 +627,6 @@ begin
   return null;
 end;
 $$;
-grant execute on function private.resolution_passes_on(uuid) to authenticated;
 
 create function private.resolution_rules()
 returns trigger
@@ -890,6 +911,11 @@ begin
       raise exception '%: the decision passed on %, after the date of %. Check the dates.', p_what, to_char(passed, 'DD/MM/YYYY'), to_char(p_on, 'DD/MM/YYYY');
     end if;
   end if;
+  -- The formation documents only cover what was done when it was formed.
+  if p_basis = 'formation' and p_on is not null
+     and exists (select 1 from public.entities e where e.id = p_entity and e.registered_on is not null and p_on > e.registered_on + 30) then
+    raise exception '%: the formation documents only cover what was done when it was formed (within 30 days of registration). Choose the minute or resolution.', p_what;
+  end if;
   if p_basis = 'instrument' and length(trim(coalesce(p_note, ''))) = 0 then
     raise exception '%: give the deed or letter of appointment (its date and who signed it).', p_what;
   end if;
@@ -928,6 +954,14 @@ begin
   end if;
   if new.basis is distinct from 'instrument' then
     new.basis_note := null;
+  end if;
+  if tg_table_name = 'share_transactions' and new.basis = 'instrument' then
+    raise exception 'Shares: a share transaction is decided by a minute or resolution, or the formation documents.';
+  end if;
+  if tg_table_name = 'appointments' and tg_op = 'UPDATE'
+     and (to_jsonb(new) -> 'entity_id', to_jsonb(new) -> 'role', to_jsonb(new) -> 'person_id', to_jsonb(new) -> 'organisation_id', to_jsonb(new) -> 'holder_entity_id')
+         is distinct from (to_jsonb(old) -> 'entity_id', to_jsonb(old) -> 'role', to_jsonb(old) -> 'person_id', to_jsonb(old) -> 'organisation_id', to_jsonb(old) -> 'holder_entity_id') then
+    raise exception 'Appointments: who holds a role, and which role, can''t be changed. End the appointment and record the new one, with the decision behind it.';
   end if;
 
   if tg_table_name = 'share_transactions' then
@@ -993,7 +1027,8 @@ as $$
     select 1 from public.file_notes n where n.id = p_note and case
       when n.entity_id is not null then private.can_see_entity_id(n.entity_id)
       when n.governance_body_id is not null then private.can_see_body('governance', null, n.governance_body_id)
-      else private.can_see_scope(n.branch_id)
+      when n.branch_id is not null then private.can_see_scope(n.branch_id)
+      else private.can_edit() or private.has_grant('whole_family')
     end
   );
 $$;
@@ -1017,7 +1052,9 @@ create policy "file_notes: read" on public.file_notes
     case
       when entity_id is not null then private.can_see_entity_id(entity_id)
       when governance_body_id is not null then private.can_see_body('governance', null, governance_body_id)
-      else private.can_see_scope(branch_id)
+      when branch_id is not null then private.can_see_scope(branch_id)
+      -- About the whole family: editors and Viewers with whole-family access.
+      else private.can_edit() or private.has_grant('whole_family')
     end
   );
 create policy "file_note_people: read" on public.file_note_people
@@ -1155,7 +1192,6 @@ revoke all on function private.board_roles(), private.votes_held(uuid, uuid, uui
   private.signatory_rules(), private.file_note_rules(), private.decision_entity(uuid),
   private.check_basis(uuid, text, uuid, text, date, text), private.basis_rules() from public;
 revoke all on function private.meeting_quorum(uuid), private.resolution_passes_on(uuid) from public;
-grant execute on function private.meeting_quorum(uuid), private.resolution_passes_on(uuid) to authenticated;
 revoke all on function private.can_see_body(text, uuid, uuid), private.can_see_meeting(uuid),
   private.can_see_resolution(uuid), private.can_see_note(uuid) from public;
 grant execute on function private.can_see_body(text, uuid, uuid), private.can_see_meeting(uuid),
@@ -1166,6 +1202,7 @@ create function public.meeting_quorum(p_meeting uuid)
 returns table (entitled integer, present integer, needed integer)
 language sql
 stable
+security definer
 set search_path = ''
 as $$
   select q.* from private.meeting_quorum(p_meeting) q where private.can_see_meeting(p_meeting);
@@ -1174,6 +1211,7 @@ create function public.body_voters(p_body text, p_entity uuid, p_gov uuid, p_on 
 returns table (person_id uuid, organisation_id uuid, holder_entity_id uuid, votes bigint)
 language sql
 stable
+security definer
 set search_path = ''
 as $$
   select v.* from private.voters(p_body, p_entity, p_gov, p_on) v
@@ -1181,4 +1219,3 @@ as $$
 $$;
 revoke all on function public.meeting_quorum(uuid), public.body_voters(text, uuid, uuid, date) from public, anon;
 grant execute on function public.meeting_quorum(uuid), public.body_voters(text, uuid, uuid, date) to authenticated;
-grant execute on function private.voters(text, uuid, uuid, date) to authenticated;

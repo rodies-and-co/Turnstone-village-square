@@ -255,7 +255,10 @@ export default async function ResolutionPage({
               {r.status === "draft" &&
                 "Draft. Add its decisions and everyone entitled to vote, then circulate it for signature."}
               {circulated &&
-                `Circulated for signature. ${signatories.filter((s) => s.signed_on).length} of ${signatories.length} have signed${weighted ? ` (${signedVotes.toLocaleString("en-GB")} of ${totalVotes.toLocaleString("en-GB")} votes)` : ""}. Once enough have signed, a Manager who didn't prepare it or record signatures confirms it passed.`}
+                // Only editors see every signatory; a Viewer may not, so no totals for them.
+                (ctx.canEdit
+                  ? `Circulated for signature. ${signatories.filter((s) => s.signed_on).length} of ${signatories.length} have signed${weighted ? ` (${signedVotes.toLocaleString("en-GB")} of ${totalVotes.toLocaleString("en-GB")} votes)` : ""}. Once enough have signed, a Manager who didn't prepare it or record signatures confirms it passed.`
+                  : "Circulated for signature. Once enough have signed, a Manager confirms it has passed. People you can't see in the Tree aren't listed below.")}
               {r.status === "passed" &&
                 `Passed on ${formatDate(r.passed_on)}, the date the last signature needed was given. Entered in the register as resolution ${r.number}.`}
               {r.status === "lapsed" &&
