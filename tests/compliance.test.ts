@@ -1,3 +1,4 @@
+import { registerList } from "@/lib/registers";
 import { describe, expect, it } from "vitest";
 import { layout } from "@/lib/structure";
 import { addBusinessDays, addMonths, describeRule, entityCalendar, eventMatches, recurringDates, type Obligation } from "@/lib/compliance";
@@ -171,5 +172,19 @@ describe("the structure chart", () => {
     const n = (key: string) => ({ key, label: key, sub: "", kind: "entity" as const });
     const { nodes } = layout([n("a"), n("b")], [{ from: "a", to: "b", label: "50%" }, { from: "b", to: "a", label: "50%" }]);
     expect(nodes).toHaveLength(2);
+  });
+});
+
+describe("which registers an entity has", () => {
+  it("a company: members, beneficial owners, then one per kind of officer it has had", () => {
+    expect(registerList("company", ["registered_agent", "director", "director"]).map(([k]) => k)).toEqual(["members", "beneficial_owners", "director", "registered_agent"]);
+  });
+  it("a foundation: founders and beneficiaries instead of members", () => {
+    expect(registerList("foundation", ["council_member"]).map(([, t]) => t)).toEqual([
+      "Register of Founders",
+      "Register of Beneficiaries",
+      "Register of Beneficial Owners",
+      "Register of Council Members",
+    ]);
   });
 });

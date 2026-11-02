@@ -201,13 +201,13 @@ export function PageTitle({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div data-page-title className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1 className="mt-1 text-[28px] leading-tight font-semibold text-ink sm:text-[30px]">{title}</h1>
         {subtitle && <p className="mt-1 text-ink-2">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2 print:hidden">{actions}</div>}
     </div>
   );
 }

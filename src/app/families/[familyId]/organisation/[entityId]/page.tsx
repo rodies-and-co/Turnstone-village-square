@@ -84,7 +84,7 @@ export default async function EntityPage({
   searchParams,
 }: {
   params: Promise<{ familyId: string; entityId: string }>;
-  searchParams: Promise<{ tab?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ tab?: string; register?: string; saved?: string; error?: string }>;
 }) {
   const { familyId, entityId } = await params;
   const sp = await searchParams;
@@ -397,7 +397,7 @@ export default async function EntityPage({
 
         {tab === "ownership" && <OwnershipTab ctx={ctx} familyId={familyId} entity={entity} names={names} rule={standard} />}
 
-        {tab === "registers" && <RegistersTab ctx={ctx} entity={entity} people={names} rule={standard} registersText={standard?.registers ?? null} />}
+        {tab === "registers" && <RegistersTab ctx={ctx} familyId={familyId} entity={entity} register={sp.register} rule={standard} />}
 
         {tab === "compliance" && <ComplianceTab ctx={ctx} familyId={familyId} entityId={entityId} names={names} />}
 
