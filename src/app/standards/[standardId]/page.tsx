@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell, PageTitle } from "@/components/AppShell";
-import { SubmitButton, Toast } from "@/components/feedback";
+import { ConfirmRemove, SubmitButton, Toast } from "@/components/feedback";
 import { Card, Checkbox, Facts, Field, Fold, Select } from "@/components/ui";
 import { requireSignedIn } from "@/lib/auth";
 import { ENTITY_TYPES, type EntityType } from "@/lib/entity-checklist";
@@ -9,7 +9,9 @@ import { formatDate } from "@/lib/governance";
 import { errorMessage, savedMessage } from "@/lib/messages";
 import { SYSTEM_ROLE_LABELS } from "@/lib/roles";
 import { STATUS_LABELS, boRuleText, type EntityStandard } from "@/lib/standards";
-import { approveStandard, retireStandard, saveStandard } from "../actions";
+import { describeRule, type Obligation } from "@/lib/compliance";
+import { APPOINTMENT_ROLES } from "@/lib/entity-checklist";
+import { addObligation, approveStandard, confirmObligation, removeObligation, retireStandard, saveStandard } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,9 @@ export default async function StandardPage({
   if (!data) notFound();
   const s = data as EntityStandard;
   const canApprove = systemRole === "super_user" || systemRole === "system_admin";
+  const { data: obligationRows } = await supabase.from("standard_obligations").select("*").eq("standard_id", standardId).order("sort");
+  const obligations = (obligationRows ?? []) as (Obligation & { id: string })[];
+  const editable = canApprove && s.status === "draft";
 
   const requirements: [string, React.ReactNode][] = [
     ["Directors (minimum)", s.min_directors || null],
@@ -125,6 +130,92 @@ export default async function StandardPage({
             {textBlock("Recurring filings", s.filings)}
             {textBlock("Event deadlines", s.event_deadlines)}
           </div>
+        </Card>
+
+        <Card
+          title="Filings calendar"
+          description="The filings and notices families' calendars are worked out from. Marked items still need confirming."
+        >
+          {obligations.length === 0 ? (
+            <p className="border-y border-border py-3 text-ink-3">None recorded, so no calendar is worked out for entities of this kind.</p>
+          ) : (
+            <ul className="divide-y divide-border border-y border-border">
+              {obligations.map((o) => (
+                <li key={o.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-medium text-ink">
+                      {o.name}
+                      {o.to_confirm && <span className="ml-2 text-sm font-normal text-ink-3">(to confirm)</span>}
+                    </div>
+                    <div className="text-sm text-ink-2">
+                      {describeRule(o)}
+                      {o.authority ? ` · ${o.authority}` : ""}
+                      {o.event_roles?.length ? ` · ${o.event_roles.map((r) => APPOINTMENT_ROLES[r as keyof typeof APPOINTMENT_ROLES] ?? r).join(", ")}` : ""}
+                    </div>
+                    {o.notes && <div className="text-xs text-ink-3">{o.notes}</div>}
+                  </div>
+                  {editable && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {o.to_confirm && (
+                        <form action={confirmObligation.bind(null, s.id, o.id)}>
+                          <SubmitButton variant="secondary">Mark as confirmed</SubmitButton>
+                        </form>
+                      )}
+                      <ConfirmRemove action={removeObligation.bind(null, s.id, o.id)} what={o.name} asks={false} />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canApprove && s.status === "approved" && (
+            <p className="mt-3 text-sm text-ink-3">To change these, use &ldquo;Change the rules&rdquo; below: that makes a new draft version with a copy of them.</p>
+          )}
+          {editable && (
+            <Fold label="Add a filing or notice">
+              <form action={addObligation.bind(null, s.id)} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Name" name="name" required />
+                  <Field label="Authority" name="authority" hint="e.g. Companies House" />
+                  <Field label="Short key" name="key" hint="Optional, e.g. annual_return. Keeps marks across versions." />
+                  <Select label="Kind" name="kind" options={{ recurring: "Recurs every year", event: "After an event" }} />
+                  <Select
+                    label="Every year, based on"
+                    name="basis"
+                    includeBlank="(for recurring ones)"
+                    options={{ anniversary: "Anniversary of registration", year_end: "Financial year end", fixed_date: "A fixed date", half_year: "Half-year of registration (two dates)" }}
+                  />
+                  <Select
+                    label="After the event"
+                    name="event_type"
+                    includeBlank="(for event ones)"
+                    options={{ officer_change: "An appointment or resignation", member_change: "A change of members", share_issue: "An issue of shares", bo_change: "A change of beneficial owners" }}
+                  />
+                  <Field label="Months after" name="offset_months" type="number" defaultValue={0} />
+                  <Field label="Days after" name="offset_days" type="number" defaultValue={0} />
+                  <Field label="Fixed date (MM-DD)" name="fixed_date" hint="e.g. 05-31" />
+                  <Field label="Second date (MM-DD)" name="alt_date" hint="Half-year only, e.g. 11-30" />
+                </div>
+                <fieldset>
+                  <legend className="mb-1 text-sm font-medium text-ink">For appointments: which roles (none ticked = all)</legend>
+                  <div className="flex flex-wrap gap-x-5">
+                    {Object.entries(APPOINTMENT_ROLES).map(([v, t]) => (
+                      <label key={v} className="flex min-h-11 items-center gap-2 text-sm text-ink">
+                        <input type="checkbox" name="event_roles" value={v} className="h-5 w-5" />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="flex flex-wrap gap-x-6">
+                  <Checkbox label="Count business days (Monday to Friday)" name="business_days" />
+                  <Checkbox label="Still to confirm" name="to_confirm" defaultChecked />
+                </div>
+                <Field label="Notes" name="notes" />
+                <SubmitButton>Add</SubmitButton>
+              </form>
+            </Fold>
+          )}
         </Card>
 
         <Card title="Sources" description={s.last_legal_check ? `Last checked ${formatDate(s.last_legal_check)}.` : undefined}>

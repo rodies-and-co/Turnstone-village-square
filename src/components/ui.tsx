@@ -226,7 +226,7 @@ export function Initials({ name, size = "md", strong }: { name: string; size?: "
 // scrolls sideways on a small screen instead of wrapping.
 export function UnderlineTabs({ label, items, current }: { label: string; items: [key: string, text: string, href: string][]; current: string }) {
   return (
-    <nav aria-label={label} className="border-b border-border">
+    <nav aria-label={label} className="border-b border-border print:hidden">
       {/* Tabs wrap onto more rows on narrower screens, so none is hidden off the edge. */}
       <ul className="-mb-px flex flex-wrap gap-x-1">
         {items.map(([key, text, href]) => {

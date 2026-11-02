@@ -72,6 +72,12 @@ export default async function OrganisationPage({
         subtitle="The family's companies, trusts and foundations. Each follows the Entity Standard for its jurisdiction and type."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link href={`/families/${familyId}/organisation/compliance`} className="btn-secondary">
+              Compliance calendar
+            </Link>
+            <Link href={`/families/${familyId}/organisation/structure`} className="btn-secondary">
+              Structure chart
+            </Link>
             <Link href={`/families/${familyId}/organisation/providers`} className="btn-secondary">
               Service providers
             </Link>

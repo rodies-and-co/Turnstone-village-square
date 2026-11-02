@@ -6,8 +6,6 @@ import type { FamilyContext } from "@/lib/family-context";
 import { formatDate } from "@/lib/governance";
 import {
   INTERESTS,
-  MANAGER_ROLES,
-  PARTY_ROLES,
   TRANSACTION_KINDS,
   beneficialOwners,
   formatMoney,
@@ -15,15 +13,12 @@ import {
   holderFrom,
   holderKey,
   ownershipShares,
-  registerOfMembers,
   ruleText,
   type BoRule,
-  type EntityOwnership,
   type Holder,
-  type ShareClass,
-  type ShareTransaction,
 } from "@/lib/ownership";
 import { formatAddress } from "@/lib/people";
+import { loadOrganisationData } from "../organisation-data";
 import {
   addBeneficiary,
   addBeneficiaryClass,
@@ -42,7 +37,6 @@ import {
 } from "../ownership-actions";
 import { BeneficiaryForm, SettlementForm, ShareClassForm, ShareTransactionForm, type HolderOptions } from "./OwnershipForms";
 
-type Row_ = Record<string, unknown>;
 type Addr = { id: string; line1: string; line2: string | null; city: string; region: string | null; postal_code: string | null; country: string };
 type EntityLite = { id: string; name: string; entity_type: string; registration_number: string | null; registered_on: string | null; registered_address_id: string | null; jurisdiction: string };
 
@@ -75,26 +69,15 @@ export async function OwnershipTab({
 
   // Everything the family records about ownership, for every entity it can
   // see: needed to look through chains of entities for beneficial owners.
-  const [ents, orgs, classes, txs, setts, bens, bclasses, bmembers, appts] = await Promise.all([
-    db.from("entities").select("id, name, entity_type, jurisdiction, registration_number, registered_on, registered_address_id").order("name"),
-    db.from("outside_organisations").select("id, name, jurisdiction, registration_number, incorporated_on, address_id").order("name"),
-    db.from("share_classes").select("id, entity_id, name, currency, par_value, limited, voting, created_at").order("created_at"),
-    db.from("share_transactions").select("*").order("transaction_date"),
-    db.from("settlements").select("*").order("settled_on"),
-    db.from("beneficiaries").select("*").order("created_at"),
-    db.from("beneficiary_classes").select("id, entity_id, name, description").order("name"),
-    db.from("beneficiary_class_members").select("id, entity_id, class_id, person_id, added_on, ceased_on"),
-    db.from("appointments").select("entity_id, role, person_id, organisation_id, holder_entity_id, ceased_on"),
-  ]);
-  const entities = (ents.data ?? []) as EntityLite[];
-  const organisations = (orgs.data ?? []) as { id: string; name: string; jurisdiction: string | null; registration_number: string | null; incorporated_on: string | null; address_id: string | null }[];
-  const allClasses = (classes.data ?? []) as (ShareClass & { entity_id: string })[];
-  const allTx = ((txs.data ?? []) as Row_[]).map((t) => ({ ...(t as unknown as ShareTransaction), entity_id: String(t.entity_id), prepared_by: t.prepared_by as string | null, edited_by: (t.edited_by as string[] | null) ?? [], updated_at: String(t.updated_at), resolution: t.resolution as string | null, consideration: t.consideration as string | null, to: holderFrom(t, "to_"), from: holderFrom(t, "from_") }));
-  const allSettlements = (setts.data ?? []) as Row_[];
-  const allBeneficiaries = (bens.data ?? []) as Row_[];
-  const allBClasses = (bclasses.data ?? []) as { id: string; entity_id: string; name: string; description: string | null }[];
-  const allMembers = (bmembers.data ?? []) as { id: string; entity_id: string; class_id: string; person_id: string; added_on: string | null; ceased_on: string | null }[];
-  const allAppts = ((appts.data ?? []) as Row_[]).filter((a) => !a.ceased_on);
+  const data = await loadOrganisationData(ctx);
+  const entities = data.entities;
+  const organisations = data.organisations;
+  const allClasses = data.classes;
+  const allTx = data.transactions;
+  const allSettlements = data.settlements;
+  const allBeneficiaries = data.beneficiaries;
+  const allBClasses = data.beneficiaryClasses;
+  const allMembers = data.classMembers;
 
   const entityName = new Map(entities.map((e) => [e.id, e.name]));
   const orgName = new Map(organisations.map((o) => [o.id, o.name]));
@@ -117,43 +100,8 @@ export async function OwnershipTab({
     return nameOf(h);
   };
 
-  // What each entity contributes to the beneficial-owner calculation.
-  const registersFor = (id: string) =>
-    registerOfMembers(
-      allClasses.filter((c) => c.entity_id === id),
-      allTx.filter((t) => t.entity_id === id),
-    );
-  const graph: EntityOwnership[] = entities.map((e) => {
-    const parties: EntityOwnership["parties"] = [];
-    for (const s of allSettlements.filter((x) => x.entity_id === e.id)) {
-      const h = holderFrom(s);
-      if (h) parties.push({ holder: h, role: e.entity_type === "foundation" ? "Founder" : "Settlor" });
-    }
-    for (const b of allBeneficiaries.filter((x) => x.entity_id === e.id && !x.ceased_on)) {
-      const h = holderFrom(b);
-      if (h) parties.push({ holder: h, role: "Beneficiary" });
-    }
-    for (const m of allMembers.filter((x) => x.entity_id === e.id && !x.ceased_on)) {
-      const cls = allBClasses.find((c) => c.id === m.class_id);
-      parties.push({ holder: { kind: "person", id: m.person_id }, role: `Beneficiary (${cls?.name ?? "a class"})` });
-    }
-    const appts = allAppts.filter((a) => a.entity_id === e.id);
-    for (const a of appts) {
-      const h = holderFrom(a);
-      if (h && PARTY_ROLES[String(a.role)]) parties.push({ holder: h, role: PARTY_ROLES[String(a.role)] });
-    }
-    return {
-      id: e.id,
-      name: e.name,
-      entity_type: e.entity_type,
-      shareholders: SHARE_TYPES.includes(e.entity_type) ? ownershipShares(registersFor(e.id)).map((o) => ({ holder: o.holder, percent: Math.max(o.percent, o.votingPercent) })) : [],
-      parties,
-      managers: appts.flatMap((a) => {
-        const h = holderFrom(a);
-        return h && MANAGER_ROLES[String(a.role)] ? [{ holder: h, role: MANAGER_ROLES[String(a.role)] }] : [];
-      }),
-    };
-  });
+  const registersFor = data.registersFor;
+  const graph = data.graph;
 
   const options: HolderOptions = {
     people: [...names.entries()].sort((a, b) => a[1].localeCompare(b[1])),

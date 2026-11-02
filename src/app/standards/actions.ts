@@ -110,3 +110,70 @@ export async function retireStandard(id: string) {
   const { error } = await db.from("entity_standards").update({ status: "retired" }).eq("id", id);
   back(id, error ? friendlyError(error.message) : undefined, "standard_retired");
 }
+
+// ---------------------------------------------------------------------------
+// Obligations (the filings calendar). Only on a draft; the hub checks this too.
+
+const KEY = /^[a-z0-9_]{2,60}$/;
+const obligationError = (m: string) => (/^Entity Standard: /.test(m) ? m.replace(/^Entity Standard: /, "") : friendlyError(m));
+const int = (v: string, lo: number, hi: number) => (/^\d+$/.test(v) && Number(v) >= lo && Number(v) <= hi ? Number(v) : null);
+
+export async function addObligation(id: string, form: FormData) {
+  const supabase = await approver(id);
+  const v = (n: string) => String(form.get(n) ?? "").trim();
+  const name = v("name");
+  const kind = v("kind");
+  const basis = kind === "recurring" ? v("basis") : null;
+  const event = kind === "event" ? v("event_type") : null;
+  if (!name) back(id, "Please name the filing or notice.");
+  if (!["recurring", "event"].includes(kind)) back(id, "Please say whether it recurs or follows an event.");
+  if (kind === "recurring" && !["anniversary", "year_end", "fixed_date", "half_year"].includes(basis ?? "")) back(id, "Please choose what the due date is based on.");
+  if (kind === "event" && !["officer_change", "member_change", "share_issue", "bo_change"].includes(event ?? "")) back(id, "Please choose the event.");
+  const months = int(v("offset_months") || "0", 0, 36);
+  const days = int(v("offset_days") || "0", 0, 365);
+  if (months === null || days === null) back(id, "Months and days should be whole numbers.");
+  const fixed = v("fixed_date"); // "MM-DD"
+  const alt = v("alt_date");
+  const md = (s: string) => (/^\d{2}-\d{2}$/.test(s) ? s.split("-").map(Number) : null);
+  if ((basis === "fixed_date" || basis === "half_year") && !md(fixed)) back(id, "Please give the date as month and day, e.g. 05-31.");
+  if (basis === "half_year" && !md(alt)) back(id, "Please give the second date as month and day, e.g. 11-30.");
+  const key = (v("key") || name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")).slice(0, 60);
+  if (!KEY.test(key)) back(id, "Please give a short key in small letters, e.g. annual_return.");
+  const roles = form.getAll("event_roles").map(String).filter(Boolean);
+  const [fm, fd] = md(fixed) ?? [null, null];
+  const [am, ad] = md(alt) ?? [null, null];
+  const { error } = await supabase.from("standard_obligations").insert({
+    standard_id: id,
+    key,
+    name,
+    authority: v("authority") || null,
+    kind,
+    basis,
+    offset_months: months,
+    offset_days: days,
+    business_days: form.get("business_days") === "on",
+    fixed_month: basis === "fixed_date" || basis === "half_year" ? fm : null,
+    fixed_day: basis === "fixed_date" || basis === "half_year" ? fd : null,
+    alt_month: basis === "half_year" ? am : null,
+    alt_day: basis === "half_year" ? ad : null,
+    event_type: event,
+    event_roles: kind === "event" && roles.length ? roles : null,
+    to_confirm: form.get("to_confirm") === "on",
+    notes: v("notes") || null,
+    sort: 1000,
+  });
+  back(id, error ? (/duplicate key/.test(error.message) ? "This standard already has an obligation with that key." : obligationError(error.message)) : undefined, "obligation_saved");
+}
+
+export async function confirmObligation(id: string, obligationId: string) {
+  const supabase = await approver(id);
+  const { error } = await supabase.from("standard_obligations").update({ to_confirm: false }).eq("id", obligationId).eq("standard_id", id);
+  back(id, error ? obligationError(error.message) : undefined, "obligation_saved");
+}
+
+export async function removeObligation(id: string, obligationId: string) {
+  const supabase = await approver(id);
+  const { data, error } = await supabase.from("standard_obligations").delete().eq("id", obligationId).eq("standard_id", id).select("id");
+  if (!error && !data?.length) back(id, "Nothing was removed. Obligations can only be changed on a draft.");
+  back(id, error ? obligationError(error.message) : undefined, "obligation_removed");
+}

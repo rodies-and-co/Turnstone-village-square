@@ -13,6 +13,11 @@ import { EntityFields } from "../EntityFields";
 import { endAppointment, removeAppointment, removeEntity, setRegisteredOffice, updateEntity, addAppointment } from "../actions";
 import { AppointmentForm } from "./AppointmentForm";
 import { OwnershipTab } from "./OwnershipTab";
+import { RegistersTab } from "./RegistersTab";
+import { ComplianceList } from "../ComplianceList";
+import { StructureChart, chartFromData } from "../StructureChart";
+import { loadCalendars, namer } from "../compliance-data";
+import { loadOrganisationData } from "../organisation-data";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +38,9 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 
 const LATER: Partial<Record<Tab, string>> = {
-  registers: "The statutory registers (members, officers, beneficial owners) are gathered here in the Compliance step. The register of members is on the Ownership & control tab.",
-  compliance: "The filings calendar, worked out from the Entity Standard, comes in the Compliance step.",
   decisions: "Minutes, written resolutions and file notes come with Meetings, resolutions and notes.",
   todo: "This entity's items from the family's one to-do list come with Organising.",
   risks: "This entity's view of the family's one risk register comes with Risk Management.",
-  organogram: "The structure chart, drawn from the ownership recorded, comes in the Compliance step.",
   finances: "Assets, liabilities, and the income and capital pools come with Finances.",
   documents: "This entity's documents come with the Vault.",
 };
@@ -394,6 +396,12 @@ export default async function EntityPage({
 
         {tab === "ownership" && <OwnershipTab ctx={ctx} familyId={familyId} entity={entity} names={names} rule={standard} />}
 
+        {tab === "registers" && <RegistersTab ctx={ctx} entity={entity} people={names} rule={standard} registersText={standard?.registers ?? null} />}
+
+        {tab === "compliance" && <ComplianceTab ctx={ctx} familyId={familyId} entityId={entityId} names={names} />}
+
+        {tab === "organogram" && <OrganogramTab ctx={ctx} familyId={familyId} entity={entity} names={names} />}
+
         {tab === "history" && <HistoryCard ctx={ctx} entityId={entityId} />}
 
         {LATER[tab] && (
@@ -449,6 +457,50 @@ async function HistoryCard({ ctx, entityId }: { ctx: Awaited<ReturnType<typeof g
           ))}
         </Rows>
       )}
+    </Card>
+  );
+}
+
+async function ComplianceTab({ ctx, familyId, entityId, names }: { ctx: Awaited<ReturnType<typeof getFamilyContext>>; familyId: string; entityId: string; names: Map<string, string> }) {
+  const data = await loadOrganisationData(ctx);
+  const calendars = await loadCalendars(ctx, data, namer(data, names), entityId);
+  return (
+    <>
+      <p className="text-sm text-ink-3">
+        Worked out from the Entity Standard and what is recorded. Check the dates before relying on them: this is a checklist, not legal advice.{" "}
+        <Link href={`/families/${familyId}/organisation/compliance`} className="underline decoration-border underline-offset-4 hover:decoration-ink">
+          The whole family&apos;s calendar
+        </Link>
+      </p>
+      <ComplianceList calendars={calendars} familyId={familyId} canEdit={ctx.canEdit} back={`/families/${familyId}/organisation/${entityId}?tab=compliance`} showEntity={false} />
+    </>
+  );
+}
+
+async function OrganogramTab({
+  ctx,
+  familyId,
+  entity,
+  names,
+}: {
+  ctx: Awaited<ReturnType<typeof getFamilyContext>>;
+  familyId: string;
+  entity: { id: string; name: string };
+  names: Map<string, string>;
+}) {
+  const data = await loadOrganisationData(ctx);
+  const { nodes, edges } = chartFromData(data, namer(data, names), familyId);
+  return (
+    <Card
+      title="Structure chart"
+      description={`Who owns ${entity.name}, and what it owns. Dashed lines are settlors, founders and family entities acting as trustee or council.`}
+      actions={
+        <Link href={`/families/${familyId}/organisation/structure`} className="btn-secondary">
+          The whole family
+        </Link>
+      }
+    >
+      <StructureChart nodes={nodes} edges={edges} focus={`entity:${entity.id}`} title={`Structure chart of ${entity.name}`} />
     </Card>
   );
 }

@@ -178,3 +178,55 @@ describe("Entity Standards: authorised share capital", () => {
     });
   });
 });
+
+describe("Entity Standards: the filings calendar (obligations)", () => {
+  const UK = "select id from entity_standards where jurisdiction = 'United Kingdom' and sub_type = 'Private company limited by shares' and status = 'approved'";
+
+  it("the starting standards have their obligations, readable by anyone signed in", async () => {
+    await as(hub, await user(USERS.hartleyViewerWholeFamily, "aal1"), async (db) => {
+      const { rows } = await db.query(`select key from standard_obligations where standard_id = (${UK}) order by key`);
+      expect(rows.map((r) => r.key)).toContain("confirmation_statement");
+      expect(rows.length).toBe(7);
+    });
+  });
+
+  it("only the Super User or System Admin change them, and only on a draft", async () => {
+    // A family's Manager can't, even on a draft.
+    await as(hub, await user(USERS.hartleyManager), async (db) => {
+      const d = (await db.query("insert into entity_standards (jurisdiction, entity_type, sub_type, name, status) values ('Jersey', 'company', 'Test Co', 'x', 'draft') returning id")).rows[0].id;
+      await expect(db.query("insert into standard_obligations (standard_id, key, name, kind, basis) values ($1, 'x_test', 'X', 'recurring', 'year_end')", [d])).rejects.toThrow(
+        /row-level security/,
+      );
+    });
+    await as(hub, await user(USERS.hartleyManager), async (db) => {
+      await expect(
+        db.query(`insert into standard_obligations (standard_id, key, name, kind, basis) values ((${UK}), 'x_test', 'X', 'recurring', 'year_end')`),
+      ).rejects.toThrow(/row-level security|only be changed on a draft/);
+    });
+    await as(hub, await user(USERS.superUser), async (db) => {
+      await db.query("savepoint a");
+      await expect(db.query(`update standard_obligations set offset_months = 1 where standard_id = (${UK})`)).rejects.toThrow(/only be changed on a draft/);
+      await db.query("rollback to savepoint a");
+      // A new version starts with a copy, and can be changed.
+      const { rows } = await db.query(
+        `insert into entity_standards (jurisdiction, entity_type, sub_type, name, status, version, based_on)
+         select jurisdiction, entity_type, sub_type, name, 'draft', version + 1, id from entity_standards where id = (${UK}) returning id`,
+      );
+      expect(await count(db, `select * from standard_obligations where standard_id = '${rows[0].id}'`)).toBe(7);
+      await db.query("update standard_obligations set offset_months = 10 where standard_id = $1 and key = 'accounts'", [rows[0].id]);
+      expect((await db.query("delete from standard_obligations where standard_id = $1 and key = 'agm'", [rows[0].id])).rowCount).toBe(0); // there is none
+      expect((await db.query("delete from standard_obligations where standard_id = $1 and key = 'accounts'", [rows[0].id])).rowCount).toBe(1);
+    });
+  });
+
+  it("a family's new draft starts with the closest standard's obligations, marked to confirm", async () => {
+    await as(hub, await user(USERS.hartleyManager), async (db) => {
+      await db.query("insert into entity_standards (jurisdiction, entity_type, sub_type, name, status) values ('United Kingdom', 'company', 'Community interest company CIC', 'x', 'draft')");
+      const { rows } = await db.query(
+        "select bool_and(to_confirm) as all_tc, count(*)::int as n from standard_obligations where standard_id = (select id from entity_standards where sub_type = 'Community interest company CIC')",
+      );
+      expect(rows[0].n).toBeGreaterThan(0);
+      expect(rows[0].all_tc).toBe(true);
+    });
+  });
+});

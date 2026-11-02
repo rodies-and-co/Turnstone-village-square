@@ -145,8 +145,8 @@ export function AppShell({
   );
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[16rem_1fr]">
-      <aside className="border-b border-border bg-background md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+    <div className="min-h-screen md:grid md:grid-cols-[16rem_1fr] print:block">
+      <aside className="border-b border-border bg-background print:hidden md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
         <div className="flex items-center justify-between gap-3 px-4 py-4 md:block md:px-4 md:pt-6">
           <Link href="/" className="block min-h-11">
             {/* The Turnstone logo: public/Turnstone-Logo.jpg */}
@@ -162,7 +162,7 @@ export function AppShell({
 
       <div className="min-w-0">
         <main className="mx-auto max-w-[70rem] px-4 py-6 sm:px-6 md:px-10 md:py-8">
-          <nav aria-label="Breadcrumb">
+          <nav aria-label="Breadcrumb" className="print:hidden">
             <ol className="flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
               {crumbs.map(([text, href], i) => (
                 <li key={i} className="flex items-center gap-2">
