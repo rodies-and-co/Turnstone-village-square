@@ -1,8 +1,10 @@
-import { londonDate } from "@/lib/organising";
 import "server-only";
 import { matchStandard, setupChecklist, type EntityType } from "@/lib/entity-checklist";
 import type { FamilyContext } from "@/lib/family-context";
 import { formatDate } from "@/lib/governance";
+import { londonDate } from "@/lib/organising";
+import { band, BANDS, describe } from "@/lib/risk";
+import { riskSuggestions, type Suggestion } from "@/lib/risk-suggestions";
 import type { EntityStandard } from "@/lib/standards";
 import { loadCalendars, namer, today } from "../organisation/compliance-data";
 import { loadOrganisationData } from "../organisation/organisation-data";
@@ -18,6 +20,7 @@ export const GROUPS = {
   resolutions: "Resolutions & signatures",
   payments: "Distributions & dividends",
   approvals: "Approvals waiting",
+  risks: "Risks",
   setup: "Setup gaps",
   investments: "Investments",
   property: "Property",
@@ -66,11 +69,12 @@ export type Item = {
   todo?: Todo; // a to-do someone added; otherwise worked out from the records
 };
 
-export type CalendarKind = "meetings" | "filings" | "payments" | "todos" | "events" | "passports";
+export type CalendarKind = "meetings" | "filings" | "payments" | "risks" | "todos" | "events" | "passports";
 export const CALENDAR_KINDS: Record<CalendarKind, string> = {
   meetings: "Meetings",
   filings: "Filings",
   payments: "Payments",
+  risks: "Risk reviews",
   todos: "To-dos",
   events: "Family dates",
   passports: "Passport expiry",
@@ -293,8 +297,82 @@ export async function loadOrganising(ctx: FamilyContext, names: Map<string, stri
       });
   }
 
+  // Risks: ratings waiting for approval, risks not rated yet, reviews due;
+  // and the risks the records suggest.
+  const [{ data: riskRows }, { data: answerRows }, { data: stmtRows }, { data: bodyRows }] = await Promise.all([
+    db.from("risks").select("id, title, status, entity_id, person_id, branch_id, next_review_on, suggestion_key, risk_reviews(status, prepared_by, changed_by, inherent_likelihood, inherent_impact, residual_likelihood, residual_impact, reviewed_on)"),
+    ctx.canEdit ? db.from("risk_suggestion_answers").select("suggestion_key, dismissed") : Promise.resolve({ data: [] }),
+    db.from("family_statements").select("kind, status, branch_id"),
+    db.from("governance_bodies").select("kind"),
+  ]);
+  type RiskLite = { id: string; title: string; status: string; entity_id: string | null; person_id: string | null; branch_id: string | null; next_review_on: string | null; suggestion_key: string | null; risk_reviews: { status: string; prepared_by: string | null; changed_by?: string[]; inherent_likelihood: number; inherent_impact: number; residual_likelihood: number; residual_impact: number; reviewed_on: string }[] };
+  const risks = (riskRows ?? []) as RiskLite[];
+  for (const r of risks.filter((x) => x.status === "open")) {
+    const href = `/families/${f}/risks/${r.id}`;
+    const people = r.person_id ? [r.person_id] : [];
+    const draft = r.risk_reviews.find((v) => v.status === "draft");
+    const approved = r.risk_reviews.filter((v) => v.status === "approved").sort((a, b) => b.reviewed_on.localeCompare(a.reviewed_on))[0];
+    if (draft)
+      items.push({
+        key: `risk-draft:${r.id}`,
+        group: "risks",
+        title: ctx.canManage ? `Approve the rating of the risk "${r.title}"` : `The rating of the risk "${r.title}" is waiting for a Manager's approval`,
+        detail: !ctx.canManage
+          ? "A Manager who didn't prepare or change it approves it."
+          : draft.prepared_by === ctx.user?.id || (draft.changed_by ?? []).includes(ctx.user?.id ?? "")
+            ? "You prepared or changed it, so another Manager approves it."
+            : "A Manager who didn't prepare or change it approves it.",
+        due: null,
+        href,
+        entityId: r.entity_id,
+        personIds: people,
+      });
+    else if (!approved)
+      items.push({ key: `risk-unrated:${r.id}`, group: "risks", title: `Rate the risk "${r.title}"`, detail: "It has no rating yet, so it isn't on the heat map.", due: null, href, entityId: r.entity_id, personIds: people });
+    if (r.next_review_on) {
+      const rating = approved ? describe(approved, "residual") : null;
+      entries.push({ key: `risk-review:${r.id}`, kind: "risks", date: r.next_review_on, title: `Review the risk "${r.title}"`, detail: rating ? `Now ${BANDS[band(rating.score)].toLowerCase()} (${rating.score})` : null, href, entityId: r.entity_id, personIds: people });
+      if (!draft && soon(r.next_review_on))
+        items.push({ key: `risk-review:${r.id}`, group: "risks", title: `Review the risk "${r.title}"`, detail: "Rate it again, or confirm the rating still stands by rating it the same.", due: r.next_review_on, href, entityId: r.entity_id, personIds: people });
+    }
+  }
+  let suggestions: Suggestion[] = [];
+  if (ctx.canEdit) {
+    const overdue = new Map<string, number>();
+    for (const c of calendars) {
+      const n = c.items.filter((i) => i.status === "overdue").length;
+      if (n) overdue.set(c.entityId, n);
+    }
+    const answered = new Set([
+      ...risks.map((r) => r.suggestion_key).filter((k): k is string => Boolean(k)),
+      ...((answerRows ?? []) as { suggestion_key: string; dismissed: boolean }[]).filter((a) => a.dismissed).map((a) => a.suggestion_key),
+    ]);
+    suggestions = riskSuggestions({
+      entities: (entRows ?? []) as { id: string; name: string; entity_type: string; status: string }[],
+      appointments: (apptRows ?? []) as { entity_id: string; role: string; ceased_on: string | null }[],
+      overdueFilings: overdue,
+      adoptedStatements: ((stmtRows ?? []) as { kind: string; status: string; branch_id: string | null }[]).filter((x) => x.status === "adopted" && !x.branch_id).map((x) => x.kind),
+      governanceBodies: ((bodyRows ?? []) as { kind: string }[]).map((b) => b.kind),
+      expiredPassports: ((passportRows ?? []) as { id: string; person_id: string; country: string; expires_on: string | null }[])
+        .filter((p) => p.expires_on && p.expires_on < now)
+        .map((p) => ({ id: p.id, personId: p.person_id, name: names.get(p.person_id) ?? "Someone", country: p.country })),
+      answered,
+    });
+    if (suggestions.length)
+      items.push({
+        key: "risk-suggestions",
+        group: "risks",
+        title: `${suggestions.length} suggested ${suggestions.length === 1 ? "risk" : "risks"} to look at`,
+        detail: "Worked out from the records. Add each to the risk register, or dismiss it with a reason.",
+        due: null,
+        href: `/families/${f}/risks?view=suggestions`,
+        entityId: null,
+        personIds: [],
+      });
+  }
+
   // Only Managers and Administrators see the to-do list; Viewers see the calendar.
-  return { items: ctx.canEdit ? items : [], entries, events, todos, now, soon, entityName };
+  return { items: ctx.canEdit ? items : [], entries, events, todos, now, soon, entityName, suggestions };
 }
 
 export function addDays(d: string, n: number) {

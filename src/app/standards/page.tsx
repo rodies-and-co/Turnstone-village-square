@@ -72,6 +72,12 @@ export default async function StandardsPage() {
         subtitle="The statutory rules for each kind of entity in each jurisdiction. They drive every entity's setup checklist. This is a compliance checklist, not legal advice."
       />
       <div className="space-y-5">
+        <p>
+          <Link href="/standards/risk-categories" className="text-ink underline">
+            Risk categories
+          </Link>{" "}
+          <span className="text-ink-2">– the categories every family&apos;s risk register uses.</span>
+        </p>
         {drafts.length > 0 && (
           <Card
             title={`Needs review (${drafts.length})`}

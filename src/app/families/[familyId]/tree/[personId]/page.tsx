@@ -5,6 +5,7 @@ import { Toast } from "@/components/feedback";
 import { Chip, UnderlineTabs } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
 import { OrganisingFor } from "../../organising/OrganisingFor";
+import { RiskFor } from "../../risks/RiskFor";
 import { errorMessage, savedMessage } from "@/lib/messages";
 import {
   THREE_CIRCLE_ROLES,
@@ -190,12 +191,12 @@ export default async function PersonPage({
             here={`/families/${familyId}/tree/${personId}?tab=todo`}
           />
         )}
-        {tab === "risks" && (
-          <LaterTab title="Risk notes">
-            This will show risks linked to this person, from the family&apos;s
-            one risk register.
-          </LaterTab>
-        )}
+        {tab === "risks" &&
+          (ctx.canEdit ? (
+            <RiskFor ctx={ctx} familyId={familyId} personId={personId} here={`/families/${familyId}/tree/${personId}?tab=risks`} />
+          ) : (
+            <LaterTab title="Risk notes">Risk notes about a person are seen by the family&apos;s Managers and Administrators only.</LaterTab>
+          ))}
         {tab === "history" && <HistoryTab {...shared} />}
       </div>
     </AppShell>

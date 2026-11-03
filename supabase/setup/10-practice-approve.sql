@@ -10,6 +10,7 @@
 --   - the circulated minutes of confirmed meetings (recorded as approved
 --     today, without a signatory);
 --   - every draft share transaction, oldest first;
+--   - every risk rating waiting for approval (once Risk management is installed);
 --   - every waiting removal request (once two-person removals are installed).
 -- All the normal checks still run (authorised shares, holdings, date order,
 -- certificate numbers, unchanged records). Anything that fails a check stays
@@ -77,6 +78,17 @@ begin
     end;
   end loop;
 
+  if to_regclass('public.risk_reviews') is not null then
+    for r in execute 'select v.id, k.title from public.risk_reviews v join public.risks k on k.id = v.risk_id where v.status = ''draft'' and v.prepared_by is distinct from $1 order by v.created_at' using approver loop
+      begin
+        execute 'update public.risk_reviews set status = ''approved'' where id = $1' using r.id;
+        done_count := done_count + 1;
+      exception when others then
+        problems := problems || E'\n  Risk rating (' || r.title || '): ' || regexp_replace(sqlerrm, '^Risks: ', '');
+      end;
+    end loop;
+  end if;
+
   if to_regclass('public.removal_requests') is not null then
     for r in execute 'select id, summary from public.removal_requests where status = ''pending'' and requested_by <> $1 order by requested_at' using approver loop
       begin
@@ -95,5 +107,7 @@ $$;
 -- What is still waiting (an empty list means everything was approved).
 select 'Share transaction' as waiting, kind || ', ' || shares || ' shares, dated ' || transaction_date as what
 from public.share_transactions where status = 'draft'
+union all
+select 'Risk rating', k.title from public.risk_reviews v join public.risks k on k.id = v.risk_id where v.status = 'draft'
 union all
 select 'Removal', summary from public.removal_requests where status = 'pending';

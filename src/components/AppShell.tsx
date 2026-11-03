@@ -21,6 +21,8 @@ type Section =
   | "todo"
   | "calendar"
   | "compliance"
+  | "risks"
+  | "heatmap"
   | "standards"
   | null;
 
@@ -35,7 +37,7 @@ const LATER_GROUPS: [string, Item[]][] = [
       "Projects",
       ["Distributions & dividends", "distributions", "/distributions"],
       "Share transactions",
-      "Risk management",
+      ["Risk management", "risks", "/risks"],
     ],
   ],
   [
@@ -46,7 +48,7 @@ const LATER_GROUPS: [string, Item[]][] = [
       ["Compliance calendar", "compliance", "/organisation/compliance"],
     ],
   ],
-  ["Reports", ["Registers & charts", "Timeline", "Risk heat map"]],
+  ["Reports", ["Registers & charts", "Timeline", ["Risk heat map", "heatmap", "/risks?view=heatmap"]]],
   ["Village Square", ["Help", "Ask the Elder", "Circles of advisors"]],
   ["Investments", ["Portfolios & properties"]],
 ];

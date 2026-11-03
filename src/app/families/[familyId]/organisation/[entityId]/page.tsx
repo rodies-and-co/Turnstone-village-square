@@ -60,6 +60,7 @@ import {
 import { decisionTargets } from "../../meetings/draft";
 import { EndAppointmentForm } from "./EndAppointmentForm";
 import { OrganisingFor } from "../../organising/OrganisingFor";
+import { RiskFor } from "../../risks/RiskFor";
 import {
   BOARD_ROLES,
   QUORUM_RULES,
@@ -88,8 +89,6 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 
 const LATER: Partial<Record<Tab, string>> = {
-  risks:
-    "This entity's view of the family's one risk register comes with Risk Management.",
   finances:
     "Assets, liabilities, and the income and capital pools come with Finances.",
   documents: "This entity's documents come with the Vault.",
@@ -904,6 +903,8 @@ export default async function EntityPage({
         )}
 
         {tab === "history" && <HistoryCard ctx={ctx} entityId={entityId} />}
+
+        {tab === "risks" && <RiskFor ctx={ctx} familyId={familyId} entityId={entityId} here={`/families/${familyId}/organisation/${entityId}?tab=risks`} />}
 
         {tab === "todo" && (
           <OrganisingFor ctx={ctx} familyId={familyId} names={names} entityId={entityId} here={`/families/${familyId}/organisation/${entityId}?tab=todo`} />

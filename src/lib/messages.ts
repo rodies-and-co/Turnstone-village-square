@@ -108,6 +108,18 @@ export const SAVED_MESSAGES = {
   todo_done: "Marked as done.",
   todo_reopened: "Back on the list.",
   event_added: "Added to the calendar.",
+  risk_added: "Risk added. Its rating is a draft until a Manager who didn't prepare it approves it.",
+  risk_added_unrated: "Risk added. Rate it below to put it on the heat map.",
+  risk_saved: "Risk saved.",
+  rating_added: "Rating saved as a draft. A Manager who didn't prepare it approves it.",
+  rating_saved: "Draft rating saved. A Manager who didn't prepare or change it approves it.",
+  rating_approved: "Rating approved. The heat map now uses it.",
+  risk_closed: "Risk closed. It stays in the register's history.",
+  risk_reopened: "Risk reopened.",
+  suggestion_dismissed: "Suggestion dismissed, with your reason. A Manager can ask it again.",
+  suggestion_reopened: "The suggestion will be shown again.",
+  category_added: "Risk category added. Every family can now use it.",
+  category_saved: "Risk category saved.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 
