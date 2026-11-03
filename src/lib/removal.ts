@@ -11,6 +11,8 @@ export function removalError(message: string | undefined) {
   if (/^(Shares|Ownership): /.test(m)) return m.replace(/^(Shares|Ownership): /, "");
   if (/foreign key/.test(m) && /share_transactions|settlements|beneficiar/.test(m))
     return "It appears in a share register, or as a settlor, founder or beneficiary, which are kept as records, so it can't be removed.";
+  if (/foreign key/.test(m) && /calendar_event_people/.test(m))
+    return "This person is linked to an entry in the family calendar. Remove the entry (or the link) first, so it isn't shown to people who couldn't see it before.";
   return friendlyError(m);
 }
 

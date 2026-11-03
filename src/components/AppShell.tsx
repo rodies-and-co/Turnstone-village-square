@@ -18,6 +18,9 @@ type Section =
   | "organisation"
   | "meetings"
   | "distributions"
+  | "todo"
+  | "calendar"
+  | "compliance"
   | "standards"
   | null;
 
@@ -35,7 +38,14 @@ const LATER_GROUPS: [string, Item[]][] = [
       "Risk management",
     ],
   ],
-  ["Organising", ["To-do list", "Calendar", "Compliance calendar"]],
+  [
+    "Organising",
+    [
+      ["To-do list", "todo", "/organising"],
+      ["Calendar", "calendar", "/organising?view=calendar"],
+      ["Compliance calendar", "compliance", "/organisation/compliance"],
+    ],
+  ],
   ["Reports", ["Registers & charts", "Timeline", "Risk heat map"]],
   ["Village Square", ["Help", "Ask the Elder", "Circles of advisors"]],
   ["Investments", ["Portfolios & properties"]],

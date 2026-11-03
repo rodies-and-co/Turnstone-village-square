@@ -59,6 +59,7 @@ import {
 } from "../../meetings/meetings-data";
 import { decisionTargets } from "../../meetings/draft";
 import { EndAppointmentForm } from "./EndAppointmentForm";
+import { OrganisingFor } from "../../organising/OrganisingFor";
 import {
   BOARD_ROLES,
   QUORUM_RULES,
@@ -77,7 +78,7 @@ const TABS = [
   ["registers", "Registers"],
   ["compliance", "Compliance & filings"],
   ["decisions", "Decisions & file notes"],
-  ["todo", "To do"],
+  ["todo", "To do & calendar"],
   ["risks", "Risks"],
   ["organogram", "Organogram"],
   ["finances", "Finances"],
@@ -87,7 +88,6 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 
 const LATER: Partial<Record<Tab, string>> = {
-  todo: "This entity's items from the family's one to-do list come with Organising.",
   risks:
     "This entity's view of the family's one risk register comes with Risk Management.",
   finances:
@@ -904,6 +904,10 @@ export default async function EntityPage({
         )}
 
         {tab === "history" && <HistoryCard ctx={ctx} entityId={entityId} />}
+
+        {tab === "todo" && (
+          <OrganisingFor ctx={ctx} familyId={familyId} names={names} entityId={entityId} here={`/families/${familyId}/organisation/${entityId}?tab=todo`} />
+        )}
 
         {tab === "decisions" && (
           <DecisionsArea

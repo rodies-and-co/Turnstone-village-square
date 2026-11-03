@@ -55,7 +55,7 @@ export default async function CompliancePage({
   return (
     <AppShell
       family={{ id: familyId, name: ctx.family.name }}
-      section="organisation"
+      section="compliance"
       crumbs={[
         ["My families", "/"],
         [familyName, `/families/${familyId}`],

@@ -103,6 +103,11 @@ export const SAVED_MESSAGES = {
   payout_drafted: "Drafted here as a decision. It is declared once this meeting is confirmed or this resolution passes; then record its payment under Distributions.",
   payout_paid: "Payment recorded.",
   payout_cancelled: "Cancelled. It stays on record.",
+  todo_added: "Added to the to-do list.",
+  todo_saved: "To-do saved.",
+  todo_done: "Marked as done.",
+  todo_reopened: "Back on the list.",
+  event_added: "Added to the calendar.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 

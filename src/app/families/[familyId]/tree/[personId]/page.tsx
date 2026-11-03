@@ -4,6 +4,7 @@ import { AppShell, PageTitle } from "@/components/AppShell";
 import { Toast } from "@/components/feedback";
 import { Chip, UnderlineTabs } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
+import { OrganisingFor } from "../../organising/OrganisingFor";
 import { errorMessage, savedMessage } from "@/lib/messages";
 import {
   THREE_CIRCLE_ROLES,
@@ -30,7 +31,7 @@ const TABS = [
   ["relationships", "Family & roles"],
   ["finances", "Finances"],
   ["records", "Records"],
-  ["todo", "To do"],
+  ["todo", "To do & calendar"],
   ["risks", "Risks"],
   ["history", "History"],
 ] as const;
@@ -181,10 +182,13 @@ export default async function PersonPage({
           </LaterTab>
         )}
         {tab === "todo" && (
-          <LaterTab title="To do">
-            This will show this person&apos;s items from the family&apos;s one
-            to-do list, once Organising is built.
-          </LaterTab>
+          <OrganisingFor
+            ctx={ctx}
+            familyId={familyId}
+            names={names}
+            personId={personId}
+            here={`/families/${familyId}/tree/${personId}?tab=todo`}
+          />
         )}
         {tab === "risks" && (
           <LaterTab title="Risk notes">
