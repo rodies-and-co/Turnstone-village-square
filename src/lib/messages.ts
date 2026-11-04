@@ -127,6 +127,7 @@ export const SAVED_MESSAGES = {
   goal_saved: "Goal saved.",
   goal_achieved: "Goal marked as achieved.",
   goal_reopened: "The goal is open again.",
+  timeline_added: "Added to the timeline.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 

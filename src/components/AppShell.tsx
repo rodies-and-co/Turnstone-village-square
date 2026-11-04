@@ -23,6 +23,10 @@ type Section =
   | "compliance"
   | "risks"
   | "projects"
+  | "reports"
+  | "timeline"
+  | "officers"
+  | "myrecords"
   | "heatmap"
   | "standards"
   | null;
@@ -49,7 +53,16 @@ const LATER_GROUPS: [string, Item[]][] = [
       ["Compliance calendar", "compliance", "/organisation/compliance"],
     ],
   ],
-  ["Reports", ["Registers & charts", "Timeline", ["Risk heat map", "heatmap", "/risks?view=heatmap"]]],
+  [
+    "Reports",
+    [
+      ["All reports", "reports", "/reports"],
+      ["Timeline", "timeline", "/reports/timeline"],
+      ["Officers & offices", "officers", "/reports/officers"],
+      ["Risk heat map", "heatmap", "/risks?view=heatmap"],
+      ["My records", "myrecords", "/reports/me"],
+    ],
+  ],
   ["Village Square", ["Help", "Ask the Elder", "Circles of advisors"]],
   ["Investments", ["Portfolios & properties"]],
 ];

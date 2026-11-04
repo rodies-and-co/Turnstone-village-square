@@ -13,6 +13,8 @@ export function removalError(message: string | undefined) {
     return "It appears in a share register, or as a settlor, founder or beneficiary, which are kept as records, so it can't be removed.";
   if (/foreign key/.test(m) && /risks_(person|entity|branch)_id_fkey/.test(m))
     return "There are risks about this in the risk register. A Manager first changes what those risks are about, or asks for unrated ones to be removed.";
+  if (/foreign key/.test(m) && /timeline_event_people|timeline_events/.test(m))
+    return "This is linked to an event on the family timeline. Remove the event (or the link) first.";
   if (/foreign key/.test(m) && /calendar_event_people/.test(m))
     return "This person is linked to an entry in the family calendar. Remove the entry (or the link) first, so it isn't shown to people who couldn't see it before.";
   return friendlyError(m);
