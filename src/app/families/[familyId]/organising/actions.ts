@@ -49,14 +49,15 @@ async function teamIds(ctx: Awaited<ReturnType<typeof getFamilyContext>>) {
   return new Set(((data ?? []) as { user_id: string }[]).map((t) => t.user_id));
 }
 
-function todoFields(form: FormData) {
+function todoFields(form: FormData, inGoal = false) {
   const title = text(form, "title");
   const due = text(form, "due_on");
-  const topic = text(form, "topic") || "actions";
+  // A to-do in a project's goal always has the projects topic.
+  const topic = inGoal ? "projects" : text(form, "topic") || "actions";
   const priority = text(form, "priority") || "normal";
   if (!title) return { error: "Please say what needs doing." };
   if (due && !isDate(due)) return { error: "Please enter the date as day, month and year." };
-  if (!TOPICS.includes(topic)) return { error: "Please choose the topic." };
+  if (!inGoal && !TOPICS.includes(topic)) return { error: "Please choose the topic." };
   if (!["high", "normal", "low"].includes(priority)) return { error: "Please choose the priority." };
   return {
     value: {
@@ -74,22 +75,27 @@ function todoFields(form: FormData) {
 export async function addTodo(familyId: string, back: string, form: FormData) {
   const to = safeBack(familyId, back);
   const ctx = await editor(familyId, to);
-  const fields = todoFields(form);
+  const goal = uuid(text(form, "project_goal_id"));
+  const fields = todoFields(form, Boolean(goal));
   if ("error" in fields) go(to, fields.error);
   const assigned = uuid(text(form, "assigned_to"));
   if (assigned && !(await teamIds(ctx)).has(assigned)) go(to, "A to-do can only be given to a Manager or Administrator of this family.");
-  const { error } = await ctx.db!.from("todos").insert({ ...fields.value, assigned_to: assigned });
+  const { error } = await ctx.db!.from("todos").insert({ ...fields.value, assigned_to: assigned, project_goal_id: goal });
   go(to, error ? friendly(error.message) : undefined, "todo_added");
 }
 
 export async function updateTodo(familyId: string, back: string, todoId: string, form: FormData) {
   const to = safeBack(familyId, back);
   const ctx = await editor(familyId, to);
-  const fields = todoFields(form);
+  const { data: existing } = await ctx.db!.from("todos").select("project_goal_id, entity_id, person_id").eq("id", todoId).maybeSingle();
+  const inGoal = Boolean(existing?.project_goal_id);
+  const fields = todoFields(form, inGoal);
   if ("error" in fields) go(to, fields.error);
   const assigned = uuid(text(form, "assigned_to"));
   if (assigned && !(await teamIds(ctx)).has(assigned)) go(to, "A to-do can only be given to a Manager or Administrator of this family.");
-  const { error } = await ctx.db!.from("todos").update({ ...fields.value, assigned_to: assigned }).eq("id", todoId);
+  // A goal's to-do keeps what it is about (its form doesn't ask).
+  const value = inGoal ? { ...fields.value, entity_id: existing!.entity_id, person_id: existing!.person_id } : fields.value;
+  const { error } = await ctx.db!.from("todos").update({ ...value, assigned_to: assigned }).eq("id", todoId);
   go(to, error ? friendly(error.message) : undefined, "todo_saved");
 }
 

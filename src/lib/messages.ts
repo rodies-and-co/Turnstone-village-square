@@ -120,6 +120,13 @@ export const SAVED_MESSAGES = {
   suggestion_reopened: "The suggestion will be shown again.",
   category_added: "Risk category added. Every family can now use it.",
   category_saved: "Risk category saved.",
+  project_added: "Project added. Add its goals below, then the to-dos for each goal.",
+  project_saved: "Project saved.",
+  stage_saved: "Stage saved.",
+  goal_added: "Goal added. Add its to-dos below it.",
+  goal_saved: "Goal saved.",
+  goal_achieved: "Goal marked as achieved.",
+  goal_reopened: "The goal is open again.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 

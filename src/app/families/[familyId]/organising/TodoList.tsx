@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ConfirmRemove, SubmitButton } from "@/components/feedback";
 import { Card, Chip, Field, Fold, Select } from "@/components/ui";
@@ -21,6 +22,7 @@ export function TodoList({
   canEdit,
   fixed,
   title = "To-do list",
+  compact,
 }: {
   familyId: string;
   items: Item[];
@@ -33,9 +35,12 @@ export function TodoList({
   me: string;
   canEdit: boolean;
   // A new to-do is about this entity or person (on their own page).
-  fixed?: { entityId?: string; personId?: string };
+  fixed?: { entityId?: string; personId?: string; goalId?: string };
   title?: string;
+  // Inside another card (a project's goal): one plain list, no cards.
+  compact?: boolean;
 }) {
+  const Box = compact ? Plain : Card;
   const open = items.filter((i) => !i.todo || i.todo.status === "open");
   const done = items.filter((i) => i.todo?.status === "done").sort((a, b) => (b.todo!.done_at ?? "").localeCompare(a.todo!.done_at ?? ""));
   const groups = (Object.keys(GROUPS) as Group[]).map((g) => [g, open.filter((i) => i.group === g).sort((a, b) => byDue({ due: a.due, priority: a.todo?.priority }, { due: b.due, priority: b.todo?.priority }))] as const);
@@ -49,21 +54,26 @@ export function TodoList({
     return i.detail.slice(n.length).replace(/^[.\s]+/, "") || null;
   };
 
-  const fields = (t?: Item["todo"], prefix = "new") => (
+  const fields = (t?: Item["todo"], prefix = fixed?.goalId ? `new-${fixed.goalId}` : "new") => (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field id={`${prefix}-title`} label="What needs doing" name="title" defaultValue={t?.title} required />
       <Field id={`${prefix}-due`} label="Due" name="due_on" type="date" defaultValue={t?.due_on} />
       <Select id={`${prefix}-assigned`} label="Given to" name="assigned_to" options={teamOptions} includeBlank="Nobody yet" defaultValue={t?.assigned_to ?? (t ? null : me)} />
       <Select id={`${prefix}-priority`} label="Priority" name="priority" options={PRIORITIES} defaultValue={t?.priority ?? "normal"} />
-      <Select id={`${prefix}-topic`} label="Topic" name="topic" options={TOPICS as Record<string, string>} defaultValue={t?.topic ?? "actions"} />
+      {t?.project_goal_id || fixed?.goalId ? (
+        <input type="hidden" name="topic" value="projects" />
+      ) : (
+        <Select id={`${prefix}-topic`} label="Topic" name="topic" options={TOPICS as Record<string, string>} defaultValue={t?.topic ?? "actions"} />
+      )}
+      {fixed?.goalId && <input type="hidden" name="project_goal_id" value={fixed.goalId} />}
       {fixed?.entityId ? (
         <input type="hidden" name="entity_id" value={fixed.entityId} />
-      ) : (
+      ) : fixed?.goalId || t?.project_goal_id ? null : (
         <Select id={`${prefix}-entity`} label="About an entity" name="entity_id" options={entities} includeBlank="None" defaultValue={t?.entity_id} />
       )}
       {fixed?.personId ? (
         <input type="hidden" name="person_id" value={fixed.personId} />
-      ) : (
+      ) : fixed?.goalId || t?.project_goal_id ? null : (
         <Select id={`${prefix}-person`} label="About a person" name="person_id" options={people} includeBlank="None" defaultValue={t?.person_id} />
       )}
       <div className="sm:col-span-2">
@@ -75,20 +85,20 @@ export function TodoList({
   return (
     <div className="space-y-5">
       {canEdit && (
-        <Card title={title} description="What the records say needs doing is added by itself and clears once it is done there. Add anything else here.">
+        <Box title={title} description={compact ? undefined : "What the records say needs doing is added by itself and clears once it is done there. Add anything else here."}>
           <Fold label="Add a to-do">
             <form action={addTodo.bind(null, familyId, here)} className="space-y-4">
               {fields()}
               <SubmitButton>Add to the list</SubmitButton>
             </form>
           </Fold>
-        </Card>
+        </Box>
       )}
-      {open.length === 0 && <p className="rounded-lg border border-border bg-card px-4 py-3 text-ink-2">Nothing to do. Everything is up to date.</p>}
+      {open.length === 0 && <p className="rounded-lg border border-border bg-card px-4 py-3 text-ink-2">{compact ? "No open to-dos for this goal." : "Nothing to do. Everything is up to date."}</p>}
       {groups
         .filter(([, list]) => list.length > 0)
         .map(([g, list]) => (
-          <Card key={g} title={`${GROUPS[g]} (${list.length})`}>
+          <Box key={g} title={compact ? `Open (${list.length})` : `${GROUPS[g]} (${list.length})`}>
             <ul className="divide-y divide-border border-y border-border">
               {list.map((i) => (
                 <li key={i.key} className="space-y-1 py-3">
@@ -135,10 +145,10 @@ export function TodoList({
                 </li>
               ))}
             </ul>
-          </Card>
+          </Box>
         ))}
       {done.length > 0 && (
-        <Card title="Done">
+        <Box title="Done">
           <Fold label={`Show what was done (${done.length})`}>
             <ul className="divide-y divide-border border-y border-border">
               {done.slice(0, 50).map((i) => (
@@ -161,8 +171,18 @@ export function TodoList({
               ))}
             </ul>
           </Fold>
-        </Card>
+        </Box>
       )}
+    </div>
+  );
+}
+
+function Plain({ title, description, children }: { title?: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      {title && <h3 className="text-sm font-semibold text-ink">{title}</h3>}
+      {description && <p className="text-sm text-ink-2">{description}</p>}
+      {children}
     </div>
   );
 }

@@ -9,12 +9,13 @@ import { CALENDAR_KINDS, type CalendarEntry, type CalendarEvent, type CalendarKi
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // Each kind has a mark as well as a colour, so colour never carries meaning alone.
-const MARK: Record<CalendarKind, string> = { meetings: "M", filings: "F", payments: "P", risks: "R", todos: "T", events: "D", passports: "X" };
+const MARK: Record<CalendarKind, string> = { meetings: "M", filings: "F", payments: "P", risks: "R", projects: "J", todos: "T", events: "D", passports: "X" };
 const TONE: Record<CalendarKind, string> = {
   meetings: "border-l-ink",
   filings: "border-l-primary",
   payments: "border-l-bronze",
   risks: "border-l-[#8f2a1d]",
+  projects: "border-l-[#2f5d50]",
   todos: "border-l-ink-3",
   events: "border-l-ink-2",
   passports: "border-l-border",

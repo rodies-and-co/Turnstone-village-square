@@ -21,6 +21,7 @@ export const GROUPS = {
   payments: "Distributions & dividends",
   approvals: "Approvals waiting",
   risks: "Risks",
+  projects: "Projects",
   setup: "Setup gaps",
   investments: "Investments",
   property: "Property",
@@ -50,6 +51,7 @@ export type Todo = {
   assigned_to: string | null;
   entity_id: string | null;
   person_id: string | null;
+  project_goal_id: string | null;
   status: "open" | "done";
   done_by: string | null;
   done_at: string | null;
@@ -69,12 +71,13 @@ export type Item = {
   todo?: Todo; // a to-do someone added; otherwise worked out from the records
 };
 
-export type CalendarKind = "meetings" | "filings" | "payments" | "risks" | "todos" | "events" | "passports";
+export type CalendarKind = "meetings" | "filings" | "payments" | "risks" | "projects" | "todos" | "events" | "passports";
 export const CALENDAR_KINDS: Record<CalendarKind, string> = {
   meetings: "Meetings",
   filings: "Filings",
   payments: "Payments",
   risks: "Risk reviews",
+  projects: "Project dates",
   todos: "To-dos",
   events: "Family dates",
   passports: "Passport expiry",
@@ -244,6 +247,27 @@ export async function loadOrganising(ctx: FamilyContext, names: Map<string, stri
       items.push({ key: `setup:${e.id}:${g.label}`, group: "setup", title: `${g.label}: ${e.name}`, detail: g.detail, due: null, href: `/families/${f}/organisation/${e.id}`, entityId: e.id, personIds: [] });
   }
 
+  // Projects: goals and projects past their target date.
+  const { data: projRows } = await db.from("projects").select("id, title, stage, target_on, entity_id, project_goals(id, title, target_on, achieved_on)");
+  type Proj = { id: string; title: string; stage: string; target_on: string | null; entity_id: string | null; project_goals: { id: string; title: string; target_on: string | null; achieved_on: string | null }[] };
+  const goalProject = new Map<string, string>();
+  for (const p of (projRows ?? []) as Proj[]) {
+    const href = `/families/${f}/projects/${p.id}`;
+    const live = p.stage !== "completed" && p.stage !== "stopped";
+    for (const g of p.project_goals) {
+      goalProject.set(g.id, p.id);
+      if (!live || g.achieved_on || !g.target_on) continue;
+      entries.push({ key: `goal:${g.id}`, kind: "projects", date: g.target_on, title: `Goal due: ${g.title} (${p.title})`, href: `${href}#goal-${g.id}`, entityId: p.entity_id, personIds: [] });
+      if (g.target_on < now)
+        items.push({ key: `goal:${g.id}`, group: "projects", title: `The goal "${g.title}" is past its target date`, detail: `${p.title}. Mark it achieved, or change its target date.`, due: g.target_on, href: `${href}#goal-${g.id}`, entityId: p.entity_id, personIds: [] });
+    }
+    if (live && p.target_on) {
+      entries.push({ key: `project:${p.id}`, kind: "projects", date: p.target_on, title: `Project target: ${p.title}`, href, entityId: p.entity_id, personIds: [] });
+      if (p.target_on < now)
+        items.push({ key: `project:${p.id}`, group: "projects", title: `The project "${p.title}" is past its target date`, detail: "Move it on to the next stage, or change its target date.", due: p.target_on, href, entityId: p.entity_id, personIds: [] });
+    }
+  }
+
   // To-dos people added.
   const todos = (todoRows ?? []) as Todo[];
   for (const t of todos) {
@@ -253,7 +277,11 @@ export async function loadOrganising(ctx: FamilyContext, names: Map<string, stri
       title: t.title,
       detail: t.details,
       due: t.due_on,
-      href: t.entity_id ? `/families/${f}/organisation/${t.entity_id}?tab=todo` : t.person_id ? `/families/${f}/tree/${t.person_id}?tab=todo` : `/families/${f}/organising`,
+      href: t.project_goal_id
+        ? `/families/${f}/projects/${goalProject.get(t.project_goal_id) ?? ""}#goal-${t.project_goal_id}`
+        : t.entity_id
+          ? `/families/${f}/organisation/${t.entity_id}?tab=todo`
+          : t.person_id ? `/families/${f}/tree/${t.person_id}?tab=todo` : `/families/${f}/organising`,
       entityId: t.entity_id,
       personIds: t.person_id ? [t.person_id] : [],
       todo: t,

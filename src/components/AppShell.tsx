@@ -22,6 +22,7 @@ type Section =
   | "calendar"
   | "compliance"
   | "risks"
+  | "projects"
   | "heatmap"
   | "standards"
   | null;
@@ -34,7 +35,7 @@ const LATER_GROUPS: [string, Item[]][] = [
     "Things to do",
     [
       ["Meetings & resolutions", "meetings", "/meetings"],
-      "Projects",
+      ["Projects", "projects", "/projects"],
       ["Distributions & dividends", "distributions", "/distributions"],
       "Share transactions",
       ["Risk management", "risks", "/risks"],
