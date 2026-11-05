@@ -15,7 +15,7 @@ describe("the timeline", () => {
     expect(dateText("2026-11-02", "day")).toBe("2 November 2026");
   });
   it("shows every kind unless some are ticked", () => {
-    expect(parseKinds(undefined)).toHaveLength(4);
+    expect(parseKinds(undefined)).toHaveLength(5);
     expect(parseKinds(undefined, "")).toEqual([]);
     expect(parseKinds(["family", "nonsense"])).toEqual(["family"]);
     expect(parseKinds(undefined, "governance,added")).toEqual(["governance", "added"]);

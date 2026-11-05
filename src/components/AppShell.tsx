@@ -23,6 +23,7 @@ type Section =
   | "compliance"
   | "risks"
   | "projects"
+  | "story"
   | "reports"
   | "timeline"
   | "officers"
@@ -149,7 +150,8 @@ export function AppShell({
               open={
                 section === "tree" ||
                 section === "branches" ||
-                section === "organisation"
+                section === "organisation" ||
+                section === "story"
               }
             >
               <ul className="pb-2">
@@ -177,7 +179,14 @@ export function AppShell({
                     The Organisation
                   </NavLink>
                 </li>
-                <Later>The Story</Later>
+                <li>
+                  <NavLink
+                    href={`/families/${family.id}/story`}
+                    active={section === "story"}
+                  >
+                    The Story
+                  </NavLink>
+                </li>
                 <Later>The Vault</Later>
               </ul>
             </MenuSection>

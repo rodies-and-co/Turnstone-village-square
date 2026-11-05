@@ -6,6 +6,7 @@ import { Chip, UnderlineTabs } from "@/components/ui";
 import { getFamilyContext } from "@/lib/family-context";
 import { OrganisingFor } from "../../organising/OrganisingFor";
 import { RiskFor } from "../../risks/RiskFor";
+import { BookOfLife } from "../../story/BookOfLife";
 import { errorMessage, savedMessage } from "@/lib/messages";
 import {
   THREE_CIRCLE_ROLES,
@@ -32,6 +33,7 @@ const TABS = [
   ["relationships", "Family & roles"],
   ["finances", "Finances"],
   ["records", "Records"],
+  ["story", "Book of Life"],
   ["todo", "To do & calendar"],
   ["risks", "Risks"],
   ["history", "History"],
@@ -191,6 +193,7 @@ export default async function PersonPage({
             here={`/families/${familyId}/tree/${personId}?tab=todo`}
           />
         )}
+        {tab === "story" && <BookOfLife ctx={ctx} familyId={familyId} personId={personId} here={`/families/${familyId}/tree/${personId}?tab=story`} />}
         {tab === "risks" &&
           (ctx.canEdit ? (
             <RiskFor ctx={ctx} familyId={familyId} personId={personId} here={`/families/${familyId}/tree/${personId}?tab=risks`} />

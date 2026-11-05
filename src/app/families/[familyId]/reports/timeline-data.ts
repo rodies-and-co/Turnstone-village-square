@@ -48,6 +48,7 @@ export async function loadTimeline(ctx: FamilyContext) {
       db.from("projects").select("id, title, stage, finished_on, entity_id, branch_id"),
       db.from("timeline_events").select("*, timeline_event_people(person_id)").order("happened_on"),
     ]);
+  const { data: storyRows } = await db.from("stories").select("id, title, happened_on, precision, status, story_people(person_id)").eq("status", "published").not("happened_on", "is", null);
   const people = (peopleRows ?? []) as (PersonSummary & { branch_id: string | null; deceased: boolean })[];
   const names = displayNames(people);
   const branchOfPerson = new Map(people.map((p) => [p.id, p.branch_id]));
@@ -167,6 +168,10 @@ export async function loadTimeline(ctx: FamilyContext) {
   for (const p of (projRows ?? []) as { id: string; title: string; stage: string; finished_on: string | null; entity_id: string | null; branch_id: string | null }[])
     if (p.stage === "completed" && p.finished_on)
       items.push({ key: `project:${p.id}`, kind: "governance", date: p.finished_on, precision: "day", title: `Project completed: ${p.title}`, href: `${f}/projects/${p.id}`, personIds: [], entityId: p.entity_id, branchId: p.branch_id ?? (p.entity_id ? (entityBranch.get(p.entity_id) ?? null) : null) });
+
+  // Stories with a date.
+  for (const s of (storyRows ?? []) as { id: string; title: string; happened_on: string; precision: "day" | "month" | "year"; story_people: { person_id: string }[] }[])
+    items.push({ key: `story:${s.id}`, kind: "stories", date: s.happened_on, precision: s.precision, title: s.title, href: `${f}/story/${s.id}`, personIds: s.story_people.map((x) => x.person_id) });
 
   // Events added by hand.
   const added = ((eventRows ?? []) as (Omit<AddedEvent, "people"> & { timeline_event_people: { person_id: string }[] })[]).map(({ timeline_event_people, ...e }) => ({ ...e, people: timeline_event_people.map((x) => x.person_id) }));

@@ -15,6 +15,8 @@ export function removalError(message: string | undefined) {
     return "There are risks about this in the risk register. A Manager first changes what those risks are about, or asks for unrated ones to be removed.";
   if (/foreign key/.test(m) && /timeline_event_people|timeline_events/.test(m))
     return "This is linked to an event on the family timeline. Remove the event (or the link) first.";
+  if (/foreign key/.test(m) && /story_people|stories_branch/.test(m))
+    return "This is linked to a story in The Story. Remove the story (or the link) first, or a Manager changes who may read it.";
   if (/foreign key/.test(m) && /calendar_event_people/.test(m))
     return "This person is linked to an entry in the family calendar. Remove the entry (or the link) first, so it isn't shown to people who couldn't see it before.";
   return friendlyError(m);

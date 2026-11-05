@@ -5,10 +5,11 @@ export const TIMELINE_KINDS = {
   family: "Family life",
   entities: "Entities & ownership",
   governance: "Governance",
+  stories: "Stories",
   added: "Added by hand",
 } as const;
 export type TimelineKind = keyof typeof TIMELINE_KINDS;
-export const KIND_MARK: Record<TimelineKind, string> = { family: "F", entities: "E", governance: "G", added: "A" };
+export const KIND_MARK: Record<TimelineKind, string> = { family: "F", entities: "E", governance: "G", stories: "S", added: "A" };
 
 export type Precision = "day" | "month" | "year";
 export type TimelineItem = {

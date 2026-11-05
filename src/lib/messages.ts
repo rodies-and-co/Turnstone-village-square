@@ -128,6 +128,14 @@ export const SAVED_MESSAGES = {
   goal_achieved: "Goal marked as achieved.",
   goal_reopened: "The goal is open again.",
   timeline_added: "Added to the timeline.",
+  story_added: "Story added.",
+  story_saved: "Story saved.",
+  story_person_added: "Person linked to the story.",
+  story_accepted: "Story added to the family's stories. The family member can now see it there.",
+  story_declined: "Story declined, with your reason. The family member can see why.",
+  story_sent: "Thank you. Your story has been sent to the family's team, who will read it before it is added.",
+  chapter_added: "Chapter added to the family story.",
+  chapter_saved: "Chapter saved.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 

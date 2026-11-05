@@ -16,6 +16,7 @@ const TONE: Record<TimelineKind, string> = {
   family: "border-l-[#2f5d50]",
   entities: "border-l-ink",
   governance: "border-l-bronze",
+  stories: "border-l-[#6b4e9b]",
   added: "border-l-primary",
 };
 
