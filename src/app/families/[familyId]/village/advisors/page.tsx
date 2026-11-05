@@ -93,7 +93,6 @@ export default async function AdvisoryTeam({
     <form action={placeAdvisor.bind(null, familyId, `${here}${domain ? `#domain-${domain}` : ""}`)} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Select id={`${prefix}-advisor`} label="Advisor" name="advisor_id" options={advisors.map((x) => [x.id, `${x.full_name}${x.firm ? `, ${x.firm}` : ""}`] as [string, string])} includeBlank="A new advisor (give their details below)" />
-        <Select id={`${prefix}-circle`} label="Circle" name="circle" options={circleOptions} defaultValue={defaultCircle} />
         {domain ? (
           <input type="hidden" name="domain" value={domain} />
         ) : (
@@ -103,8 +102,23 @@ export default async function AdvisoryTeam({
         <div className="sm:col-span-2">
           <Field id={`${prefix}-on`} label="What they advise on, in a few words" name="advises_on" hint={domain ? "Optional." : "Needed if no domain is chosen."} />
         </div>
+        <fieldset className="sm:col-span-2">
+          <legend className="mb-1 text-sm font-medium text-ink">Who do they advise? (one, several or all)</legend>
+          <div className="flex flex-wrap gap-x-5">
+            <label className="flex min-h-11 items-center gap-2 text-ink">
+              <input type="checkbox" name="circles" value="all" className="h-5 w-5" />
+              <span className="font-medium">Everyone: the family and every branch</span>
+            </label>
+            {circleOptions.map(([v, t]) => (
+              <label key={v} className="flex min-h-11 items-center gap-2 text-ink">
+                <input id={`${prefix}-c-${v}`} type="checkbox" name="circles" value={v} defaultChecked={v === defaultCircle} className="h-5 w-5" />
+                {t.replace(/'s circle$/, "").replace(/^The family$/, "The family")}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <div className="sm:col-span-2">
-          <Checkbox label="Coordinates the advisors in this circle" name="coordinator" />
+          <Checkbox label="Coordinates the advisors (in each circle chosen)" name="coordinator" />
         </div>
       </div>
       <Fold label="A new advisor's details">
@@ -116,7 +130,7 @@ export default async function AdvisoryTeam({
           <Field id={`${prefix}-phone`} label="Phone" name="phone" />
         </div>
       </Fold>
-      <SubmitButton>Add to the circle</SubmitButton>
+      <SubmitButton>Add the advisor</SubmitButton>
     </form>
   );
 

@@ -30,8 +30,8 @@ const safeBack = (familyId: string, back: string) => (back.startsWith(`/families
 function friendly(m: string | undefined) {
   if (!m) return "Something went wrong.";
   if (/^Advisors: /.test(m)) return m.replace(/^Advisors: /, "");
-  if (/advisor_roles_one_coordinator/.test(m)) return "This circle already has a coordinator. Stop the current coordinator first.";
-  if (/advisor_roles_once/.test(m)) return "That advisor already covers this domain in this circle.";
+  if (/advisor_roles_one_coordinator/.test(m)) return "One of the circles chosen already has a coordinator, so nothing was added. Stop the current coordinator first, or untick “Coordinates”.";
+  if (/advisor_roles_once/.test(m)) return "That advisor already covers this domain in one of the circles chosen. Nothing was added; untick that circle and try again.";
   if (/advisor_roles_says_what/.test(m)) return "Please choose the domain, or say what they advise on.";
   if (/email/.test(m) && /check constraint/.test(m)) return "That email address doesn't look right.";
   if (/phone/.test(m) && /check constraint/.test(m)) return "That phone number doesn't look right.";
@@ -64,9 +64,14 @@ export async function placeAdvisor(familyId: string, back: string, form: FormDat
   if (!domain && !advisesOn) go(to, "Please choose the domain, or say what they advise on.");
   const from = text(form, "from_date");
   if (from && !isDate(from)) go(to, "Please enter the date as day, month and year.");
-  const [kind, id] = text(form, "circle").split(":");
-  const branch = kind === "branch" ? uuid(id ?? "") : null;
-  if (kind === "branch" && !branch) go(to, "Please choose the circle.");
+  // Who they advise: the family, one or more branches, or everyone.
+  const chosen = form.getAll("circles").map(String);
+  const { data: branchRows } = await ctx.db!.from("branches").select("id");
+  const allBranches = ((branchRows ?? []) as { id: string }[]).map((b) => b.id);
+  const circles: (string | null)[] = chosen.includes("all")
+    ? [null, ...allBranches]
+    : [...new Set(chosen.flatMap((c) => (c === "family" ? [null] : c.startsWith("branch:") && allBranches.includes(c.slice(7)) ? [c.slice(7)] : [])))];
+  if (circles.length === 0) go(to, "Please say who they advise: the family, one or more branches, or everyone.");
   let advisorId = uuid(text(form, "advisor_id"));
   if (!advisorId) {
     const f = advisorFields(form);
@@ -75,15 +80,17 @@ export async function placeAdvisor(familyId: string, back: string, form: FormDat
     if (error || !data) go(to, friendly(error?.message));
     advisorId = data.id as string;
   }
-  const { error } = await ctx.db!.from("advisor_roles").insert({
-    advisor_id: advisorId,
-    branch_id: branch,
-    domain: domain || null,
-    advises_on: advisesOn,
-    from_date: from || null,
-    coordinator: form.get("coordinator") === "on",
-  });
-  go(to, error ? friendly(error.message) : undefined, "advisor_added");
+  const { error } = await ctx.db!.from("advisor_roles").insert(
+    circles.map((branch) => ({
+      advisor_id: advisorId,
+      branch_id: branch,
+      domain: domain || null,
+      advises_on: advisesOn,
+      from_date: from || null,
+      coordinator: form.get("coordinator") === "on",
+    })),
+  );
+  go(to, error ? friendly(error.message) : undefined, circles.length > 1 ? "advisor_added_many" : "advisor_added");
 }
 
 export async function saveAdvisorDetails(familyId: string, back: string, advisorId: string, form: FormData) {
