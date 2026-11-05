@@ -11,6 +11,29 @@ import { MobileMenu } from "@/components/MobileMenu";
 
 export type Crumb = [text: string, href?: string];
 
+// Which part of Help explains each section (the "Help" link by the breadcrumbs).
+const HELP_FOR: Partial<Record<NonNullable<Section>, string>> = {
+  "family-overview": "overview",
+  tree: "tree",
+  branches: "branches",
+  organisation: "organisation",
+  story: "story",
+  meetings: "meetings",
+  distributions: "distributions",
+  projects: "projects",
+  risks: "risks",
+  heatmap: "risks",
+  todo: "organising",
+  calendar: "organising",
+  compliance: "organising",
+  reports: "reports",
+  timeline: "reports",
+  officers: "reports",
+  myrecords: "reports",
+  elder: "elder",
+  advisors: "advisors",
+};
+
 type Section =
   | "family-overview"
   | "tree"
@@ -24,6 +47,9 @@ type Section =
   | "risks"
   | "projects"
   | "story"
+  | "elder"
+  | "help"
+  | "advisors"
   | "reports"
   | "timeline"
   | "officers"
@@ -64,7 +90,14 @@ const LATER_GROUPS: [string, Item[]][] = [
       ["My records", "myrecords", "/reports/me"],
     ],
   ],
-  ["Village Square", ["Help", "Ask the Elder", "Circles of advisors"]],
+  [
+    "Village Square",
+    [
+      ["Help", "help", "/village/help"],
+      ["Ask the Elder", "elder", "/village/elder"],
+      ["Circles of advisors", "advisors", "/village/advisors"],
+    ],
+  ],
   ["Investments", ["Portfolios & properties"]],
 ];
 
@@ -274,7 +307,7 @@ export function AppShell({
 
       <div className="min-w-0">
         <main className="mx-auto max-w-[70rem] px-4 py-6 sm:px-6 md:px-10 md:py-8">
-          <nav aria-label="Breadcrumb" className="print:hidden">
+          <nav aria-label="Breadcrumb" className="flex flex-wrap items-start justify-between gap-x-4 print:hidden">
             <ol className="flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
               {crumbs.map(([text, href], i) => (
                 <li key={i} className="flex items-center gap-2">
@@ -294,6 +327,11 @@ export function AppShell({
                 </li>
               ))}
             </ol>
+            {family && section && HELP_FOR[section] && (
+              <Link href={`/families/${family.id}/village/help#${HELP_FOR[section]}`} className="inline-flex min-h-11 items-center text-sm text-ink underline">
+                Help with this page
+              </Link>
+            )}
           </nav>
           <div className="mt-2">{children}</div>
         </main>

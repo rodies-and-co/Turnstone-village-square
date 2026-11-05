@@ -136,6 +136,7 @@ export const SAVED_MESSAGES = {
   story_sent: "Thank you. Your story has been sent to the family's team, who will read it before it is added.",
   chapter_added: "Chapter added to the family story.",
   chapter_saved: "Chapter saved.",
+  elder_answered: "The Elder has answered.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 
