@@ -137,6 +137,10 @@ export const SAVED_MESSAGES = {
   chapter_added: "Chapter added to the family story.",
   chapter_saved: "Chapter saved.",
   elder_answered: "The Elder has answered.",
+  coordinator_set: "Now coordinates this circle's advisors.",
+  coordinator_stopped: "No longer the coordinator.",
+  relationship_saved: "Saved. Only the family's team sees how relationships are working.",
+  advisor_place_ended: "Ended. It stays in the history of the circle.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 
