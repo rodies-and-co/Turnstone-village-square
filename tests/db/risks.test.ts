@@ -46,7 +46,7 @@ describe("Risks", () => {
         [USERS.okaforManager, "aal2"],
       ] as const) {
         await switchUser(db, hub, u, aal);
-        out[u] = (await db.query("select title from risks order by title")).rows.map((r) => r.title);
+        out[u] = (await db.query(`select title from risks order by title collate "C"`)).rows.map((r) => r.title);
         if (u !== ADMIN) expect(await count(db, "select 1 from risk_reviews v join risks r on r.id = v.risk_id where r.person_id is not null")).toBe(0);
       }
       return out;
