@@ -271,6 +271,9 @@ export function AppShell({
             )}
           </div>
         )}
+        <Link href="/settings/reminders" className="flex min-h-11 items-center px-3 text-[15px] text-ink-2 hover:text-ink hover:underline">
+          Email reminders
+        </Link>
         <form action={signOut}>
           <button
             type="submit"

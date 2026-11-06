@@ -142,6 +142,7 @@ export const SAVED_MESSAGES = {
   coordinator_stopped: "No longer the coordinator.",
   relationship_saved: "Saved. Only the family's team sees how relationships are working.",
   advisor_place_ended: "Ended. It stays in the history of the circle.",
+  reminders_saved: "Saved. Your reminders will follow this from now on.",
   quorum_saved: "Quorum saved. Meetings check it when their record is confirmed.",
 } as const;
 

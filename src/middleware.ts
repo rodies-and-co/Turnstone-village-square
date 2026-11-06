@@ -6,5 +6,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // The scheduled reminders job checks its own secret (no one is signed in).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/reminders).*)"],
 };

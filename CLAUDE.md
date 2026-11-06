@@ -22,7 +22,8 @@ These rules are permanent. Follow them in every change.
   or docs. Practice families: Hartley and Visser (fictional).
 - Data is hosted in the UK (Supabase London, Vercel London). Any service that
   holds data must use a UK region (or the Isle of Man, if available).
-- AI is Claude only, through Turnstone's own account. The AI must not learn
+- AI is Claude only, through Turnstone's own account (the key lives only in
+  Vercel's settings). The AI must not learn
   from the data; personal details are replaced with placeholders before
   anything is sent, and restored on return.
 
@@ -91,6 +92,12 @@ These rules are permanent. Follow them in every change.
   or screen to put them in instead.
 - Only publishable keys may be used, in the browser or the hub's `families`
   table. Secret / service-role keys are never used by the app.
+- One written-down exception (owner, 5 Nov 2026): the scheduled email
+  reminders job uses a narrow `vs_reminders` database login in the hub and in
+  each family database. It can only call the `reminders` functions (list who
+  gets reminders; count each person's items) and can't read any table. Its
+  passwords live only in Vercel's settings. Emails carry counts only, never
+  names, titles or details, and never a link.
 
 ## Look and feel
 
